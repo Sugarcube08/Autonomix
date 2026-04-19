@@ -62,15 +62,25 @@ export default function Home() {
       // 1. Create transaction to pay
       let signature;
       try {
+        const platformWallet = process.env.NEXT_PUBLIC_PLATFORM_WALLET || "4FqQ5S8C6Tf5C9v9A5M2B2F2G2H2J2K2L2M2N2P2Q2R";
         const transaction = new Transaction().add(
           SystemProgram.transfer({
             fromPubkey: publicKey,
-            toPubkey: new PublicKey("4FqQ5S8C6Tf5C9v9A5M2B2F2G2H2J2K2L2M2N2P2Q2R"), // Platform wallet
+            toPubkey: new PublicKey(platformWallet), // Platform wallet
             lamports: agent.price * LAMPORTS_PER_SOL,
           })
         );
-        signature = await sendTransaction(transaction, (window as any).solana.connection || {});
+        signature = await sendTransaction(transaction, connection);
         console.log("Transaction signature:", signature);
+
+        // Wait for network confirmation to avoid race conditions
+        const latestBlockHash = await connection.getLatestBlockhash();
+        await connection.confirmTransaction({
+          blockhash: latestBlockHash.blockhash,
+          lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
+          signature: signature,
+        }, 'confirmed');
+        console.log("Transaction confirmed");
       } catch (txErr: any) {
         console.error(txErr);
         alert(`Transaction failed: ${txErr.message || "User rejected or insufficient funds"}`);
