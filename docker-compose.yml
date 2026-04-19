@@ -1,0 +1,57 @@
+version: "3.8"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://shoujiki:shoujiki@db:5432/shoujiki
+      - SANDBOX_URL=http://sandbox:8001
+      - SOLANA_RPC_URL=https://api.devnet.solana.com
+    depends_on:
+      - db
+    networks:
+      - shoujiki-network
+
+  sandbox:
+    build:
+      context: ./sandbox
+    ports:
+      - "8001:8001"
+    networks:
+      - shoujiki-network
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - api
+    networks:
+      - shoujiki-network
+
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=shoujiki
+      - POSTGRES_PASSWORD=shoujiki
+      - POSTGRES_DB=shoujiki
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - shoujiki-network
+
+networks:
+  shoujiki-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

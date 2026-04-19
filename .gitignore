@@ -1,0 +1,6 @@
+*.txt
+venv
+__pycache__/
+.env
+**/__pycache__/
+docs/
