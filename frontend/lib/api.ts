@@ -6,8 +6,39 @@ const api = axios.create({
   baseURL: API_URL,
 });
 
+// Add interceptor to include JWT token if available
+api.interceptors.request.use((config) => {
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('shoujiki_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+  }
+  return config;
+});
+
 export const getAgents = async () => {
   const response = await api.get('/agents');
+  return response.data;
+};
+
+export const getMyAgents = async () => {
+  const response = await api.get('/agents/me');
+  return response.data;
+};
+
+export const getMyTasks = async () => {
+  const response = await api.get('/agents/tasks');
+  return response.data;
+};
+
+export const getAgent = async (id: string) => {
+  const response = await api.get(`/agents/${id}`);
+  return response.data;
+};
+
+export const deployAgent = async (agentData: any) => {
+  const response = await api.post('/agents/deploy', agentData);
   return response.data;
 };
 
@@ -17,18 +48,20 @@ export const loginWallet = async (publicKey: string, signature: string, message:
     signature,
     message,
   });
+  // Store token in localStorage
+  if (response.data.access_token) {
+    localStorage.setItem('shoujiki_token', response.data.access_token);
+  }
   return response.data;
 };
 
-export const runAgent = async (agentId: string, inputData: any, txSignature: string, token: string) => {
+export const runAgent = async (agentId: string, inputData: any, txSignature: string) => {
   const response = await api.post('/agents/run', {
     agent_id: agentId,
     input_data: inputData,
     tx_signature: txSignature,
-  }, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
   });
   return response.data;
 };
+
+export default api;

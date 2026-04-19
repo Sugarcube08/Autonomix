@@ -24,3 +24,7 @@ async def get_agent(db: AsyncSession, agent_id: str):
 async def get_all_agents(db: AsyncSession):
     result = await db.execute(select(Agent))
     return result.scalars().all()
+
+async def get_agents_by_creator(db: AsyncSession, creator_wallet: str):
+    result = await db.execute(select(Agent).where(Agent.creator_wallet == creator_wallet))
+    return result.scalars().all()

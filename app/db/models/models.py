@@ -18,6 +18,7 @@ class Task(Base):
 
     id = Column(String, primary_key=True, index=True)
     agent_id = Column(String, ForeignKey("agents.id"), nullable=False)
+    user_wallet = Column(String, nullable=False, index=True)
     input_data = Column(Text, nullable=False)
     result = Column(Text, nullable=True)
     status = Column(String, default="pending") # pending, running, completed, failed

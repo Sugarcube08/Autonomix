@@ -4,7 +4,7 @@ from sqlalchemy.future import select
 from typing import List
 from app.db.session import get_db
 from app.schemas.agent import AgentCreate, AgentResponse
-from app.schemas.task import RunRequest, TaskResponse
+from app.schemas.task import RunRequest, TaskResponse, TaskHistoryResponse
 from app.modules.agents import service as agent_service
 from app.modules.billing import service as billing_service
 from app.modules.sandbox.client import execute_in_sandbox
@@ -41,6 +41,7 @@ async def run_agent(
     db_task = Task(
         id=task_id,
         agent_id=agent.id,
+        user_wallet=current_user,
         input_data=str(req.input_data),
         status="running"
     )
@@ -92,6 +93,23 @@ async def deploy_agent(
         raise HTTPException(status_code=400, detail=msg)
     
     return await agent_service.create_agent(db, req, current_user)
+
+@router.get("/tasks", response_model=List[TaskHistoryResponse])
+async def list_my_tasks(
+    db: AsyncSession = Depends(get_db),
+    current_user: str = Depends(get_current_user)
+):
+    result = await db.execute(
+        select(Task).where(Task.user_wallet == current_user).order_by(Task.created_at.desc())
+    )
+    return result.scalars().all()
+
+@router.get("/me", response_model=List[AgentResponse])
+async def list_my_agents(
+    db: AsyncSession = Depends(get_db),
+    current_user: str = Depends(get_current_user)
+):
+    return await agent_service.get_agents_by_creator(db, current_user)
 
 @router.get("/", response_model=List[AgentResponse])
 async def list_agents(db: AsyncSession = Depends(get_db)):
