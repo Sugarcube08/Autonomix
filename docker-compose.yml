@@ -15,6 +15,7 @@ services:
       - db
     networks:
       - shoujiki-network
+      - sandbox-network
 
   sandbox:
     build:
@@ -22,7 +23,7 @@ services:
     ports:
       - "8001:8001"
     networks:
-      - shoujiki-network
+      - sandbox-network
 
   frontend:
     build:
@@ -51,6 +52,8 @@ services:
 
 networks:
   shoujiki-network:
+    driver: bridge
+  sandbox-network:
     driver: bridge
 
 volumes:

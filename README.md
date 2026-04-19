@@ -53,3 +53,9 @@ Shoujiki is a Solana-native marketplace where developers can deploy AI agents as
 - **Payment Gating**: Execution is only triggered after on-chain transaction verification.
 - **Sandbox Isolation**: Agent code runs in a separate container with strict OS-level resource limits (time & memory).
 - **Subprocess Isolation**: The sandbox API uses subprocesses to prevent rogue code from affecting the sandbox service itself.
+
+## ⚠️ Current Limitations / Future Work
+
+- **Database Migrations**: This MVP uses SQLAlchemy `create_all` for rapid development. In a production environment, this should be replaced with Alembic for managed migrations.
+- **On-chain Escrow**: Payments are currently verified via off-chain RPC monitoring of a direct transfer. A production system would use a custom Solana Program (smart contract) to hold funds in escrow until agent execution is confirmed.
+- **Advanced AST Validation**: The current agent structure validation is basic. Future versions could include more rigorous static analysis to block complex exploit patterns.

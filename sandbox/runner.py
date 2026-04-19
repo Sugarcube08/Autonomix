@@ -12,6 +12,12 @@ def set_limits():
     resource.setrlimit(resource.RLIMIT_CPU, (5, 5))
 
 def run_agent_code(code: str, input_data: str):
+    # Static security check
+    FORBIDDEN_IMPORTS = ["os", "sys", "subprocess", "socket", "requests", "httpx", "urllib"]
+    for imp in FORBIDDEN_IMPORTS:
+        if f"import {imp}" in code or f"from {imp}" in code:
+            return False, "", f"Unsafe import detected: {imp}"
+
     # We need a way to pass the input_data to the script
     # and get the result back.
     # We'll prepend some code to handle the input/output.

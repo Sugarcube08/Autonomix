@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { getAgents, loginWallet, runAgent } from "@/lib/api";
+import bs58 from "bs58";
 import { SystemProgram, Transaction, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { Loader2 } from "lucide-react";
 
@@ -45,8 +46,12 @@ export default function Home() {
   };
 
   const handleRun = async (agent: any) => {
-    if (!publicKey || !token) {
-      alert("Please login first");
+    if (!connected || !publicKey) {
+      alert("Please connect your wallet first");
+      return;
+    }
+    if (!token) {
+      alert("Please login to the API first");
       return;
     }
 
@@ -55,23 +60,34 @@ export default function Home() {
       setResult(null);
 
       // 1. Create transaction to pay
-      const transaction = new Transaction().add(
-        SystemProgram.transfer({
-          fromPubkey: publicKey,
-          toPubkey: new PublicKey("4FqQ5S8C6Tf5C9v9A5M2B2F2G2H2J2K2L2M2N2P2Q2R"), // Platform wallet
-          lamports: agent.price * LAMPORTS_PER_SOL,
-        })
-      );
-
-      const signature = await sendTransaction(transaction, (window as any).solana.connection || {});
-      console.log("Transaction signature:", signature);
+      let signature;
+      try {
+        const transaction = new Transaction().add(
+          SystemProgram.transfer({
+            fromPubkey: publicKey,
+            toPubkey: new PublicKey("4FqQ5S8C6Tf5C9v9A5M2B2F2G2H2J2K2L2M2N2P2Q2R"), // Platform wallet
+            lamports: agent.price * LAMPORTS_PER_SOL,
+          })
+        );
+        signature = await sendTransaction(transaction, (window as any).solana.connection || {});
+        console.log("Transaction signature:", signature);
+      } catch (txErr: any) {
+        console.error(txErr);
+        alert(`Transaction failed: ${txErr.message || "User rejected or insufficient funds"}`);
+        return;
+      }
 
       // 2. Call backend to run
-      const res = await runAgent(agent.id, JSON.parse(inputData), signature, token);
-      setResult(res);
-    } catch (err) {
-      console.error(err);
-      alert("Execution failed");
+      try {
+        const res = await runAgent(agent.id, JSON.parse(inputData), signature, token);
+        setResult(res);
+      } catch (runErr: any) {
+        console.error(runErr);
+        const errorMsg = runErr.response?.data?.detail || runErr.message || "Unknown execution error";
+        alert(`Execution failed: ${errorMsg}`);
+      }
+    } catch (parseErr: any) {
+      alert(`Invalid input: ${parseErr.message}`);
     } finally {
       setLoading(false);
     }

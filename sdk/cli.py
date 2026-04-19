@@ -31,6 +31,10 @@ def main():
         with open(args.file, "r") as f:
             code = f.read()
 
+        if "class Agent" not in code:
+            print("Error: Invalid agent code. Must contain a class named 'Agent'")
+            sys.exit(1)
+
         client = ShoujikiClient(base_url=args.url, token=token)
         try:
             result = client.deploy_agent(

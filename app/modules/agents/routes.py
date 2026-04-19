@@ -25,7 +25,7 @@ async def run_agent(
         raise HTTPException(status_code=404, detail="Agent not found")
     
     # 2. Verify payment
-    success, msg = await billing_service.verify_solana_payment(req.tx_signature, agent.price)
+    success, msg = await billing_service.verify_solana_payment(req.tx_signature, agent.price, current_user)
     if not success:
         raise HTTPException(status_code=402, detail=f"Payment verification failed: {msg}")
     
@@ -78,6 +78,11 @@ async def deploy_agent(
     existing = await agent_service.get_agent(db, req.id)
     if existing:
         raise HTTPException(status_code=400, detail="Agent ID already exists")
+    
+    # Validate agent code structure
+    valid, msg = validate_agent_code(req.code)
+    if not valid:
+        raise HTTPException(status_code=400, detail=msg)
     
     return await agent_service.create_agent(db, req, current_user)
 
