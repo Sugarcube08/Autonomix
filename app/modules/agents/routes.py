@@ -55,8 +55,14 @@ async def run_agent(
     db.add(db_payment)
     await db.commit()
 
-    # 4. Execute in sandbox
-    exec_result = await execute_in_sandbox(agent.code, req.input_data)
+    # 4. Execute in sandbox (using current version)
+    current_ver = next((v for v in agent.versions if v['version'] == agent.current_version), agent.versions[-1])
+    exec_result = await execute_in_sandbox(
+        files=current_ver['files'],
+        requirements=current_ver['requirements'],
+        entrypoint=current_ver['entrypoint'],
+        input_data=req.input_data
+    )
     
     # 5. Update task and release payment
     db_task.status = "completed" if exec_result["success"] else "failed"
@@ -76,19 +82,35 @@ async def run_agent(
         error=exec_result["error"] if not exec_result["success"] else None
     )
 
+@router.post("/test")
+async def test_agent(
+    req: AgentCreate,
+    current_user: str = Depends(get_current_user)
+):
+    # Rapid development endpoint: no payment, no DB persistence
+    valid, msg = validate_agent_code(req.files.get(req.entrypoint, ""))
+    if not valid:
+        raise HTTPException(status_code=400, detail=msg)
+    
+    return await execute_in_sandbox(
+        files=req.files,
+        requirements=req.requirements,
+        entrypoint=req.entrypoint,
+        input_data={"test": True}
+    )
+
 @router.post("/deploy", response_model=AgentResponse)
 async def deploy_agent(
     req: AgentCreate,
     db: AsyncSession = Depends(get_db),
     current_user: str = Depends(get_current_user)
 ):
-    # Check if agent ID already exists
-    existing = await agent_service.get_agent(db, req.id)
-    if existing:
-        raise HTTPException(status_code=400, detail="Agent ID already exists")
-    
-    # Validate agent code structure
-    valid, msg = validate_agent_code(req.code)
+    # Validate agent code structure (entrypoint)
+    entry_code = req.files.get(req.entrypoint)
+    if not entry_code:
+        raise HTTPException(status_code=400, detail=f"Entrypoint {req.entrypoint} not found in files")
+        
+    valid, msg = validate_agent_code(entry_code)
     if not valid:
         raise HTTPException(status_code=400, detail=msg)
     

@@ -2,13 +2,15 @@ import httpx
 from app.core.config import SANDBOX_URL
 import json
 
-async def execute_in_sandbox(code: str, input_data: dict):
-    async with httpx.AsyncClient(timeout=15.0) as client:
+async def execute_in_sandbox(files: dict, requirements: list, entrypoint: str, input_data: dict):
+    async with httpx.AsyncClient(timeout=30.0) as client:
         try:
             response = await client.post(
                 f"{SANDBOX_URL}/execute",
                 json={
-                    "code": code,
+                    "files": files,
+                    "requirements": requirements,
+                    "entrypoint": entrypoint,
                     "input_data": json.dumps(input_data)
                 }
             )

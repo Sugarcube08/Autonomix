@@ -42,6 +42,11 @@ export const deployAgent = async (agentData: any) => {
   return response.data;
 };
 
+export const testAgent = async (agentData: any) => {
+  const response = await api.post('/agents/test', agentData);
+  return response.data;
+};
+
 export const loginWallet = async (publicKey: string, signature: string, message: string) => {
   const response = await api.post('/auth/verify', {
     public_key: publicKey,

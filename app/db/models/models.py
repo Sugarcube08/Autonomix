@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Float, Text, DateTime, ForeignKey
+from sqlalchemy import Column, String, Float, Text, DateTime, ForeignKey, JSON
 from sqlalchemy.sql import func
 from app.db.session import Base
 
@@ -8,7 +8,8 @@ class Agent(Base):
     id = Column(String, primary_key=True, index=True)
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
-    code = Column(Text, nullable=False)
+    versions = Column(JSON, nullable=False, default=[]) # List of {version, files, requirements, entrypoint}
+    current_version = Column(String, nullable=False, default="v1")
     price = Column(Float, nullable=False)
     creator_wallet = Column(String, nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
