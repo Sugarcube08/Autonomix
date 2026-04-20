@@ -8,7 +8,7 @@ RUN npm install --legacy-peer-deps
 COPY apps/web/ .
 RUN npm run build
 
-FROM python:3.13-slim AS runner
+FROM python:3.11-slim AS runner
 
 # Install dependencies
 RUN apt-get update && apt-get install -y \
