@@ -1,52 +1,109 @@
-import httpx
-from solana.rpc.async_api import AsyncClient
-from solders.signature import Signature
-from solders.pubkey import Pubkey
-from app.core.config import SOLANA_RPC_URL, PLATFORM_WALLET
-import time
+import hashlib
 import struct
+from solders.pubkey import Pubkey
+from solders.instruction import Instruction, AccountMeta
+from solders.keypair import Keypair
+from solders.transaction import VersionedTransaction
+from solders.message import MessageV0
+from solana.rpc.async_api import AsyncClient
+from app.core.config import SOLANA_RPC_URL, PLATFORM_SECRET_SEED
+import logging
 
-async def verify_solana_payment(tx_signature_str: str, expected_amount_sol: float, sender_wallet: str):
+logger = logging.getLogger(__name__)
+
+PROGRAM_ID = Pubkey.from_string("Escrow1111111111111111111111111111111111111")
+platform_keypair = Keypair.from_seed(PLATFORM_SECRET_SEED.encode())
+
+def get_discriminator(namespace: str, name: str) -> bytes:
+    preimage = f"{namespace}:{name}"
+    return hashlib.sha256(preimage.encode()).digest()[:8]
+
+async def verify_solana_payment(task_id: str, expected_amount_sol: float, sender_wallet: str):
     async with AsyncClient(SOLANA_RPC_URL) as client:
         try:
-            signature = Signature.from_string(tx_signature_str)
+            # PDA seeds: [b"escrow", task_id]
+            seeds = [b"escrow", task_id.encode()]
+            escrow_pda, _ = Pubkey.find_program_address(seeds, PROGRAM_ID)
             
-            for _ in range(5):
-                resp = await client.get_transaction(signature, max_supported_transaction_version=0)
-                if resp.value:
-                    tx = resp.value
-                    if tx.transaction.meta.err:
-                        return False, "Transaction failed on chain"
-                    
-                    message = tx.transaction.transaction.message
-                    account_keys = message.account_keys
-                    
-                    # Also verify via System Program Transfer instruction parsing
-                    system_program_id = "11111111111111111111111111111111"
-                    valid_transfer_found = False
-                    
-                    for inst in message.instructions:
-                        program_id = str(account_keys[inst.program_id_index])
-                        if program_id == system_program_id:
-                            data = inst.data
-                            # Transfer instruction is 12 bytes: u32 (2) + u64 (lamports)
-                            if len(data) == 12 and struct.unpack('<I', data[:4])[0] == 2:
-                                lamports = struct.unpack('<Q', data[4:12])[0]
-                                from_acc = str(account_keys[inst.accounts[0]])
-                                to_acc = str(account_keys[inst.accounts[1]])
-                                
-                                if to_acc == PLATFORM_WALLET and from_acc == sender_wallet and lamports >= expected_amount_sol * 10**9 * 0.99:
-                                    valid_transfer_found = True
-                                    break
-                    
-                    if not valid_transfer_found:
-                        return False, "Valid SystemProgram transfer instruction not found in transaction"
+            logger.info(f"Verifying Escrow PDA: {escrow_pda} for task {task_id}")
 
-                    return True, "Payment verified"
+            for i in range(10): # Try for 20 seconds
+                resp = await client.get_account_info(escrow_pda)
+                if resp.value:
+                    data = resp.value.data
+                    # Anchor account discriminator is 8 bytes
+                    # maker is next 32 bytes
+                    maker_pubkey = Pubkey.from_bytes(data[8:40])
+                    # amount is at offset 104 (8+32+32+32)
+                    amount_lamports = struct.unpack('<Q', data[104:112])[0]
+                    
+                    expected_lamports = int(expected_amount_sol * 10**9)
+                    
+                    if str(maker_pubkey) == sender_wallet and amount_lamports >= expected_lamports * 0.99:
+                        logger.info("Escrow payment verified successfully")
+                        return True, "Escrow funded"
+                    else:
+                        return False, f"Escrow mismatch: maker={maker_pubkey}, amount={amount_lamports}"
                 
                 import asyncio
                 await asyncio.sleep(2)
             
-            return False, "Transaction not found after timeout"
+            return False, "Escrow PDA not found or not initialized"
         except Exception as e:
+            logger.error(f"Escrow verification error: {e}")
             return False, f"Verification error: {str(e)}"
+
+async def settle_escrow(task_id: str, agent_creator_wallet: str, success: bool):
+    """
+    Settle the escrow on-chain: resolve (payout) or refund.
+    """
+    async with AsyncClient(SOLANA_RPC_URL) as client:
+        try:
+            seeds = [b"escrow", task_id.encode()]
+            escrow_pda, _ = Pubkey.find_program_address(seeds, PROGRAM_ID)
+            
+            if success:
+                logger.info(f"Resolving escrow for task {task_id}")
+                disc = get_discriminator("global", "resolve")
+                ix = Instruction(
+                    program_id=PROGRAM_ID,
+                    data=disc,
+                    accounts=[
+                        AccountMeta(pubkey=escrow_pda, is_signer=False, is_writable=True),
+                        AccountMeta(pubkey=platform_keypair.pubkey(), is_signer=True, is_writable=True),
+                        AccountMeta(pubkey=Pubkey.from_string(agent_creator_wallet), is_signer=False, is_writable=True),
+                    ]
+                )
+            else:
+                logger.info(f"Refunding escrow for task {task_id}")
+                # We need the maker address from the state to refund
+                resp = await client.get_account_info(escrow_pda)
+                if not resp.value:
+                    return False, "Escrow account not found"
+                maker_pubkey = Pubkey.from_bytes(resp.value.data[8:40])
+                
+                disc = get_discriminator("global", "refund")
+                ix = Instruction(
+                    program_id=PROGRAM_ID,
+                    data=disc,
+                    accounts=[
+                        AccountMeta(pubkey=escrow_pda, is_signer=False, is_writable=True),
+                        AccountMeta(pubkey=platform_keypair.pubkey(), is_signer=True, is_writable=True),
+                        AccountMeta(pubkey=maker_pubkey, is_signer=False, is_writable=True),
+                    ]
+                )
+
+            recent_blockhash = (await client.get_latest_blockhash()).value.blockhash
+            msg = MessageV0.try_compile(
+                payer=platform_keypair.pubkey(),
+                instructions=[ix],
+                address_lookup_table_accounts=[],
+                recent_blockhash=recent_blockhash,
+            )
+            tx = VersionedTransaction(msg, [platform_keypair])
+            res = await client.send_transaction(tx)
+            logger.info(f"Escrow settlement tx sent: {res.value}")
+            return True, str(res.value)
+        except Exception as e:
+            logger.error(f"Escrow settlement error: {e}")
+            return False, str(e)

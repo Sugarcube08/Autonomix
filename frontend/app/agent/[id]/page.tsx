@@ -3,13 +3,14 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getAgent, runAgent } from '@/lib/api';
-import { createPaymentTransaction, confirmTx } from '@/lib/solana';
+import { createEscrowTransaction, confirmTx } from '@/lib/solana';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { useWalletAuth } from '@/hooks/useWalletAuth';
 import { Button } from '@/components/ui/Button';
 import { TextArea } from '@/components/ui/Input';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { Loader2, ArrowLeft, Play, ShieldCheck, Terminal, AlertCircle } from 'lucide-react';
+import { PublicKey } from '@solana/web3.js';
 
 export default function AgentRunPage() {
   const { id } = useParams();
@@ -38,23 +39,31 @@ export default function AgentRunPage() {
     setError('');
     setResult(null);
     try {
-      // 1. Payment
+      // 1. Generate unique Task ID
+      const taskId = crypto.randomUUID();
+      
+      // 2. Payment into Escrow
       setStatus('paying');
-      const tx = await createPaymentTransaction(publicKey, agent.price);
+      const tx = await createEscrowTransaction(
+        publicKey, 
+        new PublicKey(agent.creator_wallet), 
+        taskId, 
+        agent.price
+      );
       const signature = await sendTransaction(tx, connection);
       
-      // 2. Verification
+      // 3. Verification
       setStatus('verifying');
       await confirmTx(connection, signature);
       
-      // 3. Execution
+      // 4. Execution (Send task_id to backend)
       setStatus('executing');
-      const res = await runAgent(agent.id, JSON.parse(inputData), signature);
+      const res = await runAgent(agent.id, JSON.parse(inputData), taskId);
       setResult(res);
       setStatus('done');
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Execution failed');
+      setError(err.response?.data?.detail || err.message || 'Execution failed');
       setStatus('idle');
     }
   };
@@ -147,8 +156,8 @@ export default function AgentRunPage() {
                     onClick={handleRun}
                     isLoading={status !== 'idle' && status !== 'done'}
                   >
-                    {status === 'paying' ? 'Confirming Transaction...' :
-                     status === 'verifying' ? 'Verifying Payment...' :
+                    {status === 'paying' ? 'Funding Escrow...' :
+                     status === 'verifying' ? 'Verifying Escrow...' :
                      status === 'executing' ? 'Executing Agent...' :
                      'Pay & Run Agent'}
                   </Button>

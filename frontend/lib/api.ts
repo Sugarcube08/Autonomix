@@ -65,11 +65,11 @@ export const loginWallet = async (publicKey: string, signature: string, message:
   return response.data;
 };
 
-export const runAgent = async (agentId: string, inputData: any, txSignature: string) => {
+export const runAgent = async (agentId: string, inputData: any, taskId: string) => {
   const response = await api.post('/agents/run', {
     agent_id: agentId,
     input_data: inputData,
-    tx_signature: txSignature,
+    task_id: taskId,
   });
   return response.data;
 };

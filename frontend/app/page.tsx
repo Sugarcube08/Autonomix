@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { useRouter } from 'next/navigation';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { Rocket, Shield, Zap, ArrowRight, Github } from 'lucide-react';
+import { Rocket, Shield, Zap, ArrowRight, Code } from 'lucide-react';
 import NoSSR from '@/components/ui/NoSSR';
 
 export default function LandingPage() {
@@ -63,7 +63,7 @@ export default function LandingPage() {
             className="w-full sm:w-auto px-8 h-14 text-lg gap-2"
             onClick={() => window.open('https://github.com', '_blank')}
           >
-            <Github size={20} />
+            <Code size={20} />
             View Source
           </Button>
         </div>

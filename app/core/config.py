@@ -1,5 +1,13 @@
 import os
+import base64
 
-PLATFORM_WALLET = os.getenv("PLATFORM_WALLET", "675kSimabH286zbR47u6oZsZ4C9YPrY7T4mF7Wv7V19")
-SOLANA_RPC_URL = os.getenv("SOLANA_RPC_URL", "https://api.devnet.solana.com")
+# Use a deterministic seed for local development
+PLATFORM_SECRET_SEED = os.getenv("PLATFORM_SECRET_SEED", "shoujiki_escrow_platform_secret_32")
+if len(PLATFORM_SECRET_SEED) < 32:
+    PLATFORM_SECRET_SEED = (PLATFORM_SECRET_SEED + " " * 32)[:32]
+else:
+    PLATFORM_SECRET_SEED = PLATFORM_SECRET_SEED[:32]
+
+PLATFORM_WALLET = os.getenv("PLATFORM_WALLET", "") # Will be derived from seed if empty
+SOLANA_RPC_URL = os.getenv("SOLANA_RPC_URL", "http://solana:8899")
 SANDBOX_URL = os.getenv("SANDBOX_URL", "http://sandbox:8001")

@@ -21,41 +21,28 @@ async def run_agent(
     db: AsyncSession = Depends(get_db),
     current_user: str = Depends(get_current_user)
 ):
-    # 0. Check for replay attack
-    existing_payment = await db.execute(select(Payment).where(Payment.tx_signature == req.tx_signature))
-    if existing_payment.scalars().first():
-        raise HTTPException(status_code=400, detail="Transaction signature already used (replay attack)")
-
     # 1. Get agent
     agent = await agent_service.get_agent(db, req.agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     
-    # 2. Verify payment
-    success, msg = await billing_service.verify_solana_payment(req.tx_signature, agent.price, current_user)
+    # 2. Verify escrow payment on-chain
+    success, msg = await billing_service.verify_solana_payment(req.task_id, agent.price, current_user)
     if not success:
-        raise HTTPException(status_code=402, detail=f"Payment verification failed: {msg}")
+        raise HTTPException(status_code=402, detail=f"Escrow verification failed: {msg}")
     
-    # 3. Create task and payment records
-    task_id = str(uuid.uuid4())
+    # 3. Create task record (using task_id from frontend)
     db_task = Task(
-        id=task_id,
+        id=req.task_id,
         agent_id=agent.id,
         user_wallet=current_user,
         input_data=str(req.input_data),
         status="running"
     )
-    db_payment = Payment(
-        task_id=task_id,
-        tx_signature=req.tx_signature,
-        amount=agent.price,
-        status="locked"
-    )
     db.add(db_task)
-    db.add(db_payment)
     await db.commit()
 
-    # 4. Execute in sandbox (using current version)
+    # 4. Execute in sandbox
     current_ver = next((v for v in agent.versions if v['version'] == agent.current_version), agent.versions[-1])
     exec_result = await execute_in_sandbox(
         files=current_ver['files'],
@@ -64,19 +51,19 @@ async def run_agent(
         input_data=req.input_data
     )
     
-    # 5. Update task and release payment
+    # 5. Update task and settle escrow on-chain
     db_task.status = "completed" if exec_result["success"] else "failed"
     db_task.result = exec_result["output"]
     if not exec_result["success"]:
         db_task.result = exec_result["error"]
     
-    # Release payment to developer
-    db_payment.status = "released"
-    
     await db.commit()
+
+    # On-chain settlement: payout if success, refund if failed
+    settle_ok, tx_sig = await billing_service.settle_escrow(req.task_id, agent.creator_wallet, exec_result["success"])
     
     return TaskResponse(
-        task_id=task_id,
+        task_id=req.task_id,
         status=db_task.status,
         result=db_task.result if exec_result["success"] else None,
         error=exec_result["error"] if not exec_result["success"] else None

@@ -31,13 +31,24 @@ services:
       - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_SOLANA_RPC_URL=http://localhost:8899
     depends_on:
       - api
     networks:
       - shoujiki-network
 
+  solana:
+    build:
+      context: .
+      dockerfile: Dockerfile.anchor
+    ports:
+      - "8899:8899"
+    networks:
+      - shoujiki-network
+      - sandbox-network
+
   db:
-    image: postgres:15
+    image: postgres:latest
     environment:
       - POSTGRES_USER=shoujiki
       - POSTGRES_PASSWORD=shoujiki

@@ -4,8 +4,8 @@ from datetime import datetime
 
 class RunRequest(BaseModel):
     agent_id: str
+    task_id: str
     input_data: dict
-    tx_signature: str
 
 class TaskResponse(BaseModel):
     task_id: str

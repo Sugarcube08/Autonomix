@@ -1,0 +1,47 @@
+# -----------------------------
+# 1. Solana + Anchor Environment
+# -----------------------------
+FROM solanalabs/solana:v1.18.26
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libudev-dev \
+    libssl-dev \
+    jq \
+    curl \
+    wget \
+    git \
+    python3 \
+    ca-certificates \
+    tar \
+    xz-utils \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Install Anchor CLI v1.0.0
+RUN cargo install --git https://github.com/coral-xyz/anchor \
+    --tag v1.0.0 anchor-cli --locked --force
+
+# -----------------------------
+# App
+# -----------------------------
+WORKDIR /anchor
+COPY ./anchor /anchor
+
+# Wallet
+RUN mkdir -p /root/.config/solana && \
+    solana-keygen new --no-bip39-passphrase -o /root/.config/solana/id.json
+
+# Debug versions
+RUN anchor --version && solana --version
+
+# Build
+RUN anchor keys sync
+RUN anchor build
+
+CMD ["bash", "-c", "solana-test-validator --rpc-port 8899 --bind-address 0.0.0.0 & sleep 10 && anchor deploy && tail -f /dev/null"]
