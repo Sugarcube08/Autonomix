@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { 
   Plus, Play, Rocket, Trash2, ArrowRight, Loader2, 
   Activity, CheckCircle2, AlertCircle, History, ExternalLink,
-  ChevronRight, Bot, Cpu, Layers
+  ChevronRight, Bot, Cpu, Layers, Info
 } from 'lucide-react';
 import axios from 'axios';
 
