@@ -43,9 +43,9 @@ COPY apps/sandbox/ .
 
 # Setup Web (Standalone)
 WORKDIR /app
-COPY --from=frontend-builder /app/apps/web/.next/standalone ./web/
-COPY --from=frontend-builder /app/apps/web/.next/static ./web/.next/static
-COPY --from=frontend-builder /app/apps/web/public ./web/public
+COPY --from=frontend-builder /app/.next/standalone ./web/
+COPY --from=frontend-builder /app/.next/static ./web/.next/static
+COPY --from=frontend-builder /app/public ./web/public
 
 # Supervisor configuration
 RUN mkdir -p /var/log/supervisor
