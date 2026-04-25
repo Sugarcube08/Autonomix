@@ -6,6 +6,8 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     curl \
     supervisor \
+    redis-server \
+    util-linux \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

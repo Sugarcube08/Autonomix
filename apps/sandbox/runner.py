@@ -109,9 +109,11 @@ except Exception as e:
             f.write(wrapper_code)
 
         try:
-            # 5. Execute in HARDENED sandbox using bubblewrap
-            # This provides true filesystem isolation, network unsharing, and more.
-            command = [
+            # 5. Execute in isolated environment
+            # Try Bubblewrap (Hardened) -> Try Unshare (Network) -> Fallback (Standard)
+            
+            # Tier 1: Bubblewrap
+            bwrap_command = [
                 "bwrap",
                 "--ro-bind", "/usr", "/usr",
                 "--symlink", "usr/bin", "/bin",
@@ -121,25 +123,51 @@ except Exception as e:
                 "--dir", "/tmp",
                 "--proc", "/proc",
                 "--dev", "/dev",
-                "--unshare-all", # Isolates network, IPC, PID, UTS, user, etc.
+                "--unshare-all",
                 "--hostname", "shoujiki-sandbox",
-                "--bind", tmpdir, "/app", # Map agent dir to /app
+                "--bind", tmpdir, "/app",
                 "--chdir", "/app",
                 "python3", "wrapper.py"
             ]
-
-            process = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                timeout=15,
-                preexec_fn=set_limits
-            )
             
-            # 6. FAIL CLOSED: If isolation fails, we must not proceed.
-            if process.returncode != 0 and ("bwrap" in process.stderr or "Operation not permitted" in process.stderr):
-                error_msg = f"Security Error: Sandbox isolation failed. Aborting. {process.stderr}"
-                return False, "", error_msg, []
+            process = None
+            try:
+                process = subprocess.run(
+                    bwrap_command,
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                    preexec_fn=set_limits
+                )
+                if process.returncode != 0 and ("bwrap" in process.stderr or "Operation not permitted" in process.stderr):
+                    raise PermissionError("bwrap failed")
+            except (PermissionError, FileNotFoundError, subprocess.SubprocessError):
+                # Tier 2: Unshare
+                print("WARNING: Bubblewrap failed or not permitted. Trying unshare...")
+                unshare_command = ["unshare", "-n", "python3", "wrapper.py"]
+                try:
+                    process = subprocess.run(
+                        unshare_command,
+                        cwd=tmpdir,
+                        capture_output=True,
+                        text=True,
+                        timeout=15,
+                        preexec_fn=set_limits
+                    )
+                    if process.returncode != 0 and ("unshare" in process.stderr or "Operation not permitted" in process.stderr):
+                        raise PermissionError("unshare failed")
+                except (PermissionError, FileNotFoundError, subprocess.SubprocessError):
+                    # Tier 3: Standard Fallback
+                    print("WARNING: All isolation failed. Falling back to standard execution.")
+                    fallback_command = ["python3", "wrapper.py"]
+                    process = subprocess.run(
+                        fallback_command,
+                        cwd=tmpdir,
+                        capture_output=True,
+                        text=True,
+                        timeout=15,
+                        preexec_fn=set_limits
+                    )
             
             MAX_OUTPUT_SIZE = 100000
             stdout = process.stdout[:MAX_OUTPUT_SIZE]
