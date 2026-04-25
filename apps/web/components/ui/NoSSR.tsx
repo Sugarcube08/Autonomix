@@ -7,7 +7,7 @@ const NoSSRComponent = ({ children }: { children: React.ReactNode }) => (
   <React.Fragment>{children}</React.Fragment>
 );
 
-export const NoSSR = dynamic(() => Promise.resolve(NoSSRComponent), {
+const NoSSR = dynamic(() => Promise.resolve(NoSSRComponent), {
   ssr: false,
 });
 

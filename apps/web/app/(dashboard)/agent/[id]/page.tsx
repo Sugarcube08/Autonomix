@@ -9,7 +9,7 @@ import { useWalletAuth } from '@/hooks/useWalletAuth';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { 
-  Loader2, ArrowLeft, Play, Shield, Terminal, 
+  Loader2, ArrowLeft, Play, Terminal, 
   AlertCircle, BadgeCheck, Cpu, Activity, Lock, 
   CheckCircle2, Fingerprint, Wallet as WalletIcon
 } from 'lucide-react';

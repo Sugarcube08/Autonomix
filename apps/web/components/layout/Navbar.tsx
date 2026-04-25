@@ -4,8 +4,8 @@ import React from 'react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useWalletAuth } from '@/hooks/useWalletAuth';
 import { Button } from '@/components/ui/Button';
-import { Shield, User, LogOut, ChevronDown } from 'lucide-react';
-import { NoSSR } from '@/components/ui/NoSSR';
+import { LogOut } from 'lucide-react';
+import NoSSR from '@/components/ui/NoSSR';
 
 export const Navbar = () => {
   const { isAuthenticated, login, logout, loading, publicKey, connected } = useWalletAuth();
