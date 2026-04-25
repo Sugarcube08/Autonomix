@@ -28,9 +28,13 @@ COPY apps/sandbox/ .
 # Supervisor configuration
 WORKDIR /app
 RUN mkdir -p /var/log/supervisor
-COPY deploy/render-backend/supervisor.conf /app/supervisor.conf
+# Explicitly copy to /etc/supervisor/supervisord.conf to override EVERYTHING
+COPY deploy/render-backend/supervisord.conf /etc/supervisor/supervisord.conf
+# Also copy to a backup location just in case
+COPY deploy/render-backend/supervisord.conf /app/supervisord.conf
 
 # Expose ONLY the API port to Render
 EXPOSE 8000
 
-CMD ["/usr/bin/supervisord", "-n", "-c", "/app/supervisor.conf"]
+# Force supervisor to use the explicit config and stay in foreground
+CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/supervisord.conf"]

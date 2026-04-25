@@ -16,6 +16,8 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     curl \
     supervisor \
+    redis-server \
+    util-linux \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
@@ -43,8 +45,10 @@ COPY --from=frontend-builder /app/public ./web/public
 
 # Supervisor configuration
 RUN mkdir -p /var/log/supervisor
-COPY deploy/mono/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+# Force same configuration across all entrypoints
+COPY deploy/mono/supervisord.conf /etc/supervisor/supervisord.conf
 
 EXPOSE 3000 8000 8001
 
-CMD ["/usr/bin/supervisord"]
+# Stay explicit
+CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/supervisord.conf"]
