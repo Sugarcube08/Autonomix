@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 REDIS_HOST = os.getenv("REDIS_HOST", "127.0.0.1")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "shoujiki_v3_secure_redis_2026")
 
 async def run_agent_task(ctx, task_id: str, agent_id: str, input_data: dict, creator_wallet: str, price: float, depth: int = 0):
     """
@@ -228,9 +229,21 @@ async def run_workflow_task(ctx, run_id: str, workflow_id: str, initial_input: d
                 
                 # Input mapping
                 prev_result = workflow_results["steps"][-1]["output"] if workflow_results["steps"] else initial_input
+                
+                # Standard input payload for the agent
                 step_input = {"input": prev_result}
-                if "{{previous_result}}" in template:
-                    step_input = {"input": template.replace("{{previous_result}}", str(prev_result))}
+                
+                # If there's a template, apply it
+                if template and "{{previous_result}}" in template:
+                    template_filled = template.replace("{{previous_result}}", str(prev_result))
+                    try:
+                        # Attempt to parse as JSON if it looks like a JSON object
+                        if template_filled.strip().startswith("{"):
+                           step_input = json.loads(template_filled)
+                        else:
+                           step_input = {"input": template_filled}
+                    except:
+                        step_input = {"input": template_filled}
 
                 # Sandbox Execute
                 exec_result = await execute_in_sandbox(
@@ -293,6 +306,6 @@ async def shutdown(ctx):
 
 class WorkerSettings:
     functions = [run_agent_task, run_workflow_task]
-    redis_settings = RedisSettings(host=REDIS_HOST, port=REDIS_PORT)
+    redis_settings = RedisSettings(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD)
     on_startup = startup
     on_shutdown = shutdown

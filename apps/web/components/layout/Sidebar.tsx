@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, ShoppingCart, Code2, User2, Zap, Rocket, Activity, Globe, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { WalletWidget } from './WalletWidget';
 
 const navItems = [
   { label: 'Marketplace', href: '/marketplace', icon: ShoppingCart },
@@ -68,6 +69,8 @@ export const Sidebar = () => {
           );
         })}
       </nav>
+
+      <WalletWidget />
 
       <div className="p-6 space-y-4">
         {/* Network Status Card */}

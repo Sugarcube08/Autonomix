@@ -18,6 +18,80 @@ platform_keypair = Keypair.from_seed(seed_bytes)
 PLATFORM_WALLET = str(platform_keypair.pubkey())
 logger.info(f"SOLANA: Platform Wallet initialized: {PLATFORM_WALLET}")
 
+async def get_internal_balance(db: AsyncSession, wallet_address: str) -> float:
+    from backend.db.models.models import UserWallet
+    result = await db.execute(select(UserWallet).where(UserWallet.wallet_address == wallet_address))
+    wallet = result.scalars().first()
+    if not wallet:
+        # Auto-create wallet record on first access
+        wallet = UserWallet(wallet_address=wallet_address, balance=0.0)
+        db.add(wallet)
+        await db.commit()
+    return wallet.balance
+
+async def deposit_to_internal_wallet(db: AsyncSession, wallet_address: str, tx_signature: str) -> tuple[bool, str]:
+    """Verifies an on-chain transfer to PLATFORM_WALLET and credits internal balance."""
+    # 1. Verify the transaction
+    # We expect a transfer of SOL to PLATFORM_WALLET
+    async with AsyncClient(SOLANA_RPC_URL) as client:
+        try:
+            # Re-use existing verify logic or slightly modify
+            tx_resp = await client.get_transaction(tx_signature, encoding="jsonParsed", max_supported_transaction_version=0)
+            if not tx_resp.value:
+                return False, "Transaction not found"
+            
+            tx = tx_resp.value.transaction
+            actual_sender = str(tx.transaction.message.account_keys[0].pubkey)
+            if actual_sender != wallet_address:
+                return False, "Sender mismatch"
+            
+            # Check instructions for transfer to platform
+            amount_sol = 0
+            for ix in tx.transaction.message.instructions:
+                if hasattr(ix, 'parsed') and ix.program == "system":
+                    info = ix.parsed.get("info")
+                    if info and info.get("destination") == PLATFORM_WALLET:
+                        amount_sol += info.get("lamports", 0) / 1e9
+            
+            if amount_sol <= 0:
+                return False, "No SOL transfer to platform found"
+            
+            # 2. Credit internal balance
+            from backend.db.models.models import UserWallet
+            result = await db.execute(select(UserWallet).where(UserWallet.wallet_address == wallet_address))
+            wallet = result.scalars().first()
+            if not wallet:
+                wallet = UserWallet(wallet_address=wallet_address, balance=amount_sol)
+                db.add(wallet)
+            else:
+                wallet.balance += amount_sol
+            
+            await db.commit()
+            return True, f"Successfully deposited {amount_sol} SOL"
+            
+        except Exception as e:
+            logger.error(f"Deposit error: {e}")
+            return False, str(e)
+
+async def withdraw_from_internal_wallet(db: AsyncSession, wallet_address: str, amount: float) -> tuple[bool, str]:
+    """Deducts internal balance and sends real SOL from PLATFORM_WALLET to user."""
+    from backend.db.models.models import UserWallet
+    result = await db.execute(select(UserWallet).where(UserWallet.wallet_address == wallet_address))
+    wallet = result.scalars().first()
+    
+    if not wallet or wallet.balance < amount:
+        return False, "Insufficient internal balance"
+    
+    # 1. Perform on-chain transfer
+    ok, tx_sig = await transfer_sol(wallet_address, amount)
+    if not ok:
+        return False, f"Blockchain transfer failed: {tx_sig}"
+    
+    # 2. Deduct balance
+    wallet.balance -= amount
+    await db.commit()
+    return True, tx_sig
+
 ESCROW_PROGRAM_ID = Pubkey.from_string("SHoujikiEscrow11111111111111111111111111111")
 
 def get_anchor_discriminator(name: str) -> bytes:

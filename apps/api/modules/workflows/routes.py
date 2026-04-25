@@ -39,13 +39,31 @@ async def run_workflow(
     db: AsyncSession = Depends(get_db),
     current_user: str = Depends(get_current_user)
 ):
-    # 1. Get workflow
+    # 1. Get workflow and calculate total price
+    from backend.db.models.models import Agent, UserWallet
     result = await db.execute(select(Workflow).where(Workflow.id == workflow_id))
     workflow = result.scalars().first()
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
     
-    # 2. Create WorkflowRun
+    total_price = 0.0
+    for step in workflow.steps:
+        agent_res = await db.execute(select(Agent).where(Agent.id == step["agent_id"]))
+        agent = agent_res.scalars().first()
+        if agent:
+            total_price += agent.price
+    
+    # 2. Check internal balance
+    wallet_res = await db.execute(select(UserWallet).where(UserWallet.wallet_address == current_user))
+    wallet = wallet_res.scalars().first()
+    
+    if not wallet or wallet.balance < total_price:
+        raise HTTPException(status_code=402, detail=f"Insufficient in-app balance. Required: {total_price} SOL")
+
+    # 3. Deduct from in-app wallet (Escrowed for the whole swarm)
+    wallet.balance -= total_price
+
+    # 4. Create WorkflowRun
     run_id = str(uuid.uuid4())
     db_run = WorkflowRun(
         id=run_id,
@@ -58,7 +76,7 @@ async def run_workflow(
     db.add(db_run)
     await db.commit()
 
-    # 3. Enqueue in background worker
+    # 5. Enqueue in background worker
     redis = request.app.state.redis
     await redis.enqueue_job(
         'run_workflow_task',

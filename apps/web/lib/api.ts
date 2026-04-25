@@ -56,6 +56,21 @@ export const testAgent = async (agentData: any) => {
   return response.data;
 };
 
+export const getInternalWallet = async () => {
+  const response = await api.get('/billing/balance');
+  return response.data;
+};
+
+export const depositFunds = async (txSignature: string) => {
+  const response = await api.post('/billing/deposit', { tx_signature: txSignature });
+  return response.data;
+};
+
+export const withdrawFunds = async (amount: number) => {
+  const response = await api.post('/billing/withdraw', { amount });
+  return response.data;
+};
+
 export const runAgent = async (
   agentId: string, 
   inputData: any, 

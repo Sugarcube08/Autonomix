@@ -33,8 +33,9 @@ async def lifespan(app: FastAPI):
         logger.info("SECRET_KEY loaded from environment.")
 
     # Initialize Redis pool for background tasks
-    app.state.redis = await create_pool(RedisSettings(host=REDIS_HOST, port=REDIS_PORT))
-    logger.info("Redis pool initialized")
+    REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "shoujiki_v3_secure_redis_2026")
+    app.state.redis = await create_pool(RedisSettings(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD))
+    logger.info("Redis pool initialized with security authorization")
 
     # Startup: Create tables with retries (Wait for DB to awaken)
     max_retries = 10
@@ -58,6 +59,14 @@ async def lifespan(app: FastAPI):
                     await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS mint_address VARCHAR"))
                     await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS balance FLOAT DEFAULT 0"))
                     await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS treasury_address VARCHAR"))
+                    # Create user_wallets table if it doesn't exist
+                    await conn.execute(text("""
+                        CREATE TABLE IF NOT EXISTS user_wallets (
+                            wallet_address VARCHAR PRIMARY KEY,
+                            balance FLOAT DEFAULT 0,
+                            updated_at TIMESTAMP WITH TIME ZONE
+                        )
+                    """))
                 except Exception as migrate_err:
                     logger.warning(f"Manual migration notice (likely already applied): {migrate_err}")
 
