@@ -15,8 +15,8 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-export const loginWallet = async (wallet: string, signature: string, message: string) => {
-  const response = await api.post('/auth/verify', { wallet, signature, message });
+export const loginWallet = async (public_key: string, signature: string, message: string) => {
+  const response = await api.post('/auth/verify', { public_key, signature, message });
   localStorage.setItem('shoujiki_token', response.data.access_token);
   return response.data;
 };
