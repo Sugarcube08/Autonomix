@@ -18,7 +18,8 @@ import {
   Layers,
   ChevronRight,
   MonitorPlay,
-  Save
+  Save,
+  CheckCircle2
 } from 'lucide-react';
 import { useWalletAuth } from '@/hooks/useWalletAuth';
 import Editor from "@monaco-editor/react";
