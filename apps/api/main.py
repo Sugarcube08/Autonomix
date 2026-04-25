@@ -50,11 +50,14 @@ async def lifespan(app: FastAPI):
                 # This handles cases where Render DB already exists but code has new fields
                 try:
                     await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS total_runs FLOAT DEFAULT 0"))
+                    await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS successful_runs FLOAT DEFAULT 0"))
                     await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS reputation_score FLOAT DEFAULT 100"))
                     await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS reliability_score FLOAT DEFAULT 1"))
                     await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS contribution_score FLOAT DEFAULT 0"))
                     await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS trust_level VARCHAR DEFAULT 'verified'"))
                     await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS mint_address VARCHAR"))
+                    await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS balance FLOAT DEFAULT 0"))
+                    await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS treasury_address VARCHAR"))
                 except Exception as migrate_err:
                     logger.warning(f"Manual migration notice (likely already applied): {migrate_err}")
 
