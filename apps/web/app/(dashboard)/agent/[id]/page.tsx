@@ -243,4 +243,3 @@ export default function AgentRunPage() {
   );
 }
 
-import { ArrowLeft } from 'lucide-react';
