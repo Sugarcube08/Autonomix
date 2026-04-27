@@ -1,6 +1,23 @@
-from sqlalchemy import Column, String, Float, Text, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, String, Float, Text, DateTime, ForeignKey, JSON, Boolean
 from sqlalchemy.sql import func
 from backend.db.session import Base
+
+class UserWallet(Base):
+    __tablename__ = "user_wallets"
+
+    wallet_address = Column(String, primary_key=True, index=True)
+    balance = Column(Float, nullable=False, default=0.0)
+    
+    # Allowance Configuration: { agent_id: limit_amount }
+    allowances = Column(JSON, nullable=False, default={})
+    
+    # Auto Top-Up Configuration
+    auto_topup_enabled = Column(Boolean, default=False)
+    auto_topup_threshold = Column(Float, default=1.0) # SOL
+    auto_topup_amount = Column(Float, default=2.0)    # SOL
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 class Agent(Base):
     __tablename__ = "agents"
@@ -18,6 +35,10 @@ class Agent(Base):
     total_runs = Column(Float, nullable=False, default=0)
     successful_runs = Column(Float, nullable=False, default=0)
     
+    # Financials (Internal Ledger before final settlement/withdrawal)
+    balance = Column(Float, nullable=False, default=0.0)
+    total_earnings = Column(Float, nullable=False, default=0.0)
+
     # Protocol Integration Fields (AgentOS Level-Up)
     world_id_hash = Column(String, nullable=True) # World ID: Proof of human for creator
     squads_vault_pda = Column(String, nullable=True) # Squads V4: Agent's sovereign treasury
@@ -77,5 +98,112 @@ class WorkflowRun(Base):
     completed_steps = Column(JSON, nullable=True, default={})
     results = Column(JSON, nullable=True) 
 
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+class MarketOrder(Base):
+    __tablename__ = "market_orders"
+
+    id = Column(String, primary_key=True, index=True)
+    creator_wallet = Column(String, nullable=False, index=True)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    budget = Column(Float, nullable=False)
+    required_skills = Column(JSON, nullable=False, default=[])
+    status = Column(String, default="open") # open, bidding_closed, active, completed, cancelled
+    selected_bid_id = Column(String, nullable=True)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+class Bid(Base):
+    __tablename__ = "bids"
+
+    id = Column(String, primary_key=True, index=True)
+    order_id = Column(String, ForeignKey("market_orders.id", ondelete="CASCADE"), nullable=False)
+    agent_id = Column(String, ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
+    amount = Column(Float, nullable=False)
+    proposal = Column(Text, nullable=True)
+    status = Column(String, default="pending") # pending, accepted, rejected
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class Dispute(Base):
+    __tablename__ = "disputes"
+
+    id = Column(String, primary_key=True, index=True)
+    task_id = Column(String, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False)
+    reporter_wallet = Column(String, nullable=False)
+    reason = Column(Text, nullable=False)
+    evidence = Column(JSON, nullable=True)
+    status = Column(String, default="open") # open, investigating, resolved, dismissed
+    resolution_details = Column(Text, nullable=True)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+class AgentCredit(Base):
+    __tablename__ = "agent_credits"
+
+    agent_id = Column(String, ForeignKey("agents.id", ondelete="CASCADE"), primary_key=True)
+    credit_score = Column(Float, default=500.0) # 300 - 850 range (FICO-like for agents)
+    credit_limit = Column(Float, default=0.0) # Max SOL borrowable
+    utilization = Column(Float, default=0.0)
+    repayment_history = Column(JSON, default=[]) # List of repayments
+    
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+class AgentLoan(Base):
+    __tablename__ = "agent_loans"
+
+    id = Column(String, primary_key=True, index=True)
+    agent_id = Column(String, ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
+    lender_wallet = Column(String, nullable=False) # Can be protocol or another agent
+    principal = Column(Float, nullable=False)
+    interest_rate = Column(Float, nullable=False) # Annualized %
+    term_days = Column(Float, nullable=False)
+    balance_remaining = Column(Float, nullable=False)
+    status = Column(String, default="active") # active, repaid, defaulted
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    due_at = Column(DateTime(timezone=True), nullable=False)
+
+class AgentBond(Base):
+    __tablename__ = "agent_bonds"
+
+    id = Column(String, primary_key=True, index=True)
+    agent_id = Column(String, ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
+    amount = Column(Float, nullable=False)
+    purpose = Column(String, nullable=False) # e.g., "high_value_task_guarantee"
+    status = Column(String, default="locked") # locked, released, slashed
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    locked_until = Column(DateTime(timezone=True), nullable=True)
+
+class ProtocolProposal(Base):
+    __tablename__ = "protocol_proposals"
+
+    id = Column(String, primary_key=True, index=True)
+    proposer_wallet = Column(String, nullable=False)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    parameter_change = Column(JSON, nullable=True) # e.g., {"fee_ratio": 0.05}
+    status = Column(String, default="active") # active, passed, defeated, executed
+    
+    votes_for = Column(Float, default=0.0)
+    votes_against = Column(Float, default=0.0)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+
+class ExecutorStake(Base):
+    __tablename__ = "executor_stakes"
+
+    executor_id = Column(String, primary_key=True, index=True)
+    wallet_address = Column(String, nullable=False, index=True)
+    amount_staked = Column(Float, nullable=False)
+    reputation_score = Column(Float, default=100.0)
+    status = Column(String, default="active") # active, jailed, slashed
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

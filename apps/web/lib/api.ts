@@ -96,6 +96,61 @@ export const getTaskStatus = async (taskId: string) => {
   return tasks.find((t: any) => t.id === taskId);
 };
 
+export const getMyAppWallet = async () => {
+  const response = await api.get('/billing/wallet/me');
+  return response.data;
+};
+
+export const getAgentCredit = async (agentId: string) => {
+  const response = await api.get(`/billing/agent/${agentId}/credit`);
+  return response.data;
+};
+
+export const refreshCreditScore = async (agentId: string) => {
+  const response = await api.post(`/billing/agent/${agentId}/credit/refresh`);
+  return response.data;
+};
+
+export const requestAgentLoan = async (agentId: string, amount: number) => {
+  const response = await api.post(`/billing/agent/${agentId}/loans`, { amount });
+  return response.data;
+};
+
+export const depositToAppWallet = async (amount: number) => {
+  const response = await api.post('/billing/wallet/deposit', { amount });
+  return response.data;
+};
+
+export const withdrawFromAppWallet = async (amount: number) => {
+  const response = await api.post('/billing/wallet/withdraw', { amount });
+  return response.data;
+};
+
+export const getMarketOrders = async (status: string = "open") => {
+  const response = await api.get(`/marketplace/orders?status=${status}`);
+  return response.data;
+};
+
+export const createMarketOrder = async (orderData: any) => {
+  const response = await api.post('/marketplace/orders', orderData);
+  return response.data;
+};
+
+export const placeBid = async (orderId: string, bidData: any) => {
+  const response = await api.post(`/marketplace/orders/${orderId}/bids`, bidData);
+  return response.data;
+};
+
+export const getOrderBids = async (orderId: string) => {
+  const response = await api.get(`/marketplace/orders/${orderId}/bids`);
+  return response.data;
+};
+
+export const acceptBid = async (orderId: string, bidId: string) => {
+  const response = await api.post(`/marketplace/orders/${orderId}/bids/${bidId}/accept`);
+  return response.data;
+};
+
 export const withdrawAgentBalance = async (id: string) => {
   const response = await api.post(`/billing/agent/${id}/withdraw`, {});
   return response.data;

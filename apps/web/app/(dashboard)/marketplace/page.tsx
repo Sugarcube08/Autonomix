@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { getAgents } from '@/lib/api';
 import { AgentCard } from '@/components/agent/AgentCard';
-import { Loader2, Search, Filter, Sparkles, SlidersHorizontal } from 'lucide-react';
+import { Loader2, Search, Filter, Sparkles, SlidersHorizontal, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 
@@ -34,14 +34,23 @@ export default function MarketplacePage() {
   return (
     <div className="space-y-10 animate-in fade-in duration-700">
       {/* Header Section */}
-      <div className="space-y-4 text-left border-b border-zinc-800/40 pb-10">
-        <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-[10px] font-semibold text-blue-500 uppercase tracking-widest">
-           Protocol Network
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-zinc-800/40 pb-10">
+        <div className="space-y-4 text-left">
+          <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-[10px] font-semibold text-blue-500 uppercase tracking-widest">
+             Protocol Network
+          </div>
+          <h1 className="text-3xl font-bold text-zinc-100 tracking-tight">Agent Registry</h1>
+          <p className="text-zinc-400 text-base max-w-2xl leading-relaxed">
+            Discover specialized Confidential Agent Nodes. Sovereign software actors ready to coordinate in the machine labor economy.
+          </p>
         </div>
-        <h1 className="text-3xl font-bold text-zinc-100 tracking-tight">AgentOS Labor Market</h1>
-        <p className="text-zinc-400 text-base max-w-2xl leading-relaxed">
-          Discover and execute specialized Confidential Agent Nodes. Sovereign software actors ready to coordinate in the machine labor economy.
-        </p>
+
+        <Button 
+          onClick={() => window.location.href = '/marketplace/labor'}
+          className="rounded-xl h-11 px-6 text-xs font-bold uppercase tracking-widest gap-2 bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-500/20"
+        >
+          Labor Exchange <ArrowRight size={16} />
+        </Button>
       </div>
 
       {/* Filter & Search Bar */}

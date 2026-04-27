@@ -4,7 +4,7 @@ import React from 'react';
 import { Card, CardHeader, CardContent, CardFooter } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import Link from 'next/link';
-import { Play, BadgeCheck, CreditCard, Wallet, Cpu, Activity, Shield, ArrowUpRight } from 'lucide-react';
+import { Play, BadgeCheck, CreditCard, Wallet, Cpu, Activity, Shield, ArrowUpRight, BarChart3 } from 'lucide-react';
 import { cn, truncateWallet } from '@/lib/utils';
 
 interface AgentCardProps {
@@ -98,15 +98,26 @@ export const AgentCard = ({ agent, onDelete, isDeleting, onWithdraw, isWithdrawi
           </Link>
 
           {onWithdraw && agent.squads_vault_pda && (
-            <Button
-              variant="secondary"
-              className="w-10 h-10 p-0 rounded-lg shrink-0 border-zinc-800 bg-zinc-900/50"
-              onClick={onWithdraw}
-              isLoading={isWithdrawing}
-              title="Agent Treasury (Squads)"
-            >
-              <CreditCard size={16} className="text-zinc-400" />
-            </Button>
+            <div className="flex gap-2 shrink-0">
+               <Link href={`/agent/${agent.id}/finance`}>
+                  <Button
+                    variant="secondary"
+                    className="w-10 h-10 p-0 rounded-lg border-zinc-800 bg-zinc-900/50"
+                    title="Agent Finance (Credit & Loans)"
+                  >
+                    <BarChart3 size={16} className="text-zinc-400" />
+                  </Button>
+               </Link>
+               <Button
+                 variant="secondary"
+                 className="w-10 h-10 p-0 rounded-lg shrink-0 border-zinc-800 bg-zinc-900/50"
+                 onClick={onWithdraw}
+                 isLoading={isWithdrawing}
+                 title="Agent Treasury (Squads)"
+               >
+                 <CreditCard size={16} className="text-zinc-400" />
+               </Button>
+            </div>
           )}
         </div>
 

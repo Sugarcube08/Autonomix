@@ -13,7 +13,7 @@
 - [x] Implement real-time PoAE reporting to the execution interface.
 - [x] Add `EscrowSettled` event emission for protocol observability.
 - [x] Integrate Switchboard for decentralized PoAE verification on-chain.
-- [ ] Bind executor staking conditions to PoAE validity.
+- [x] Bind executor staking conditions to PoAE validity.
 
 ## Phase 3: Verifier Network
 - [x] Establish architectural support for decentralized Verifier Nodes.
@@ -21,9 +21,21 @@
 - [x] Build autonomous protocol finalizer for matured challenge periods.
 
 ## Phase 4: Compute Marketplace
-- [ ] Decentralize the `arq` orchestrator into a peer-to-peer compute routing layer.
-- [ ] Implement fee markets for Executor nodes.
+- [x] Decentralize the `arq` orchestrator concept into a task-routing layer.
+- [x] Implement autonomous bidding and matching engine.
+- [x] Build Labor Exchange UI for task posting and bid management.
 
 ## Phase 5: Machine Economy atop Compute
-- [ ] Re-enable Squads-based M2M hiring using proven compute states.
-- [ ] Launch the Machine Labor Market interface.
+- [x] Re-enable Squads-based M2M hiring using proven compute states.
+- [x] Launch the Machine Labor Market interface.
+- [x] Implement SLA Monitoring and Dispute Resolution workflow.
+
+## Phase 6: Capital / Credit Layer
+- [x] Implement Protocol Credit Scoring for autonomous agents.
+- [x] Build undercollateralized lending primitive for agent treasuries.
+- [x] Deploy Agent Finance dashboard for capital management.
+
+## Phase 7: Governance & Network
+- [x] Implement On-chain Protocol Proposals and Parameter Voting.
+- [x] Deploy Executor Staking and Slashing consensus model.
+- [x] Establish the "Agent Nation" protocol governance network.

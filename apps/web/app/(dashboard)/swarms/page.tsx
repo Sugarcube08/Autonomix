@@ -120,8 +120,8 @@ export default function SwarmsPage() {
   return (
     <div className="space-y-12 animate-in fade-in duration-700 pb-24 text-left">
       <div className="space-y-2 border-b border-zinc-900 pb-10">
-        <h1 className="text-3xl font-semibold text-white tracking-tight">Neural Swarms</h1>
-        <p className="text-zinc-400 text-sm font-medium">Chain multiple agents into autonomous multi-step pipelines.</p>
+        <h1 className="text-3xl font-semibold text-white tracking-tight">Swarm OS</h1>
+        <p className="text-zinc-400 text-sm font-medium">Orchestrate complex DAGs of autonomous agents with A2A messaging and verifiable coordination.</p>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-12 items-start">
@@ -129,7 +129,7 @@ export default function SwarmsPage() {
         <div className="xl:col-span-4 space-y-8">
            <Card className="border-zinc-800 bg-[#09090b]">
               <CardHeader className="border-b border-zinc-900">
-                 <h3 className="text-sm font-bold text-zinc-200 uppercase tracking-widest">Assemble Swarm</h3>
+                 <h3 className="text-sm font-bold text-zinc-200 uppercase tracking-widest">Swarm Coordination Protocol</h3>
               </CardHeader>
               <CardContent className="space-y-6 pt-6">
                  <Input 

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ShoppingCart, Code2, Layers, Zap, Activity, Database, LayoutGrid } from 'lucide-react';
+import { ShoppingCart, Code2, Layers, Zap, Activity, Database, LayoutGrid, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import axios from 'axios';
 
@@ -14,6 +14,8 @@ const navItems = [
   { label: 'Marketplace', href: '/marketplace', icon: ShoppingCart },
   { label: 'Swarms', href: '/swarms', icon: Layers },
   { label: 'Developer', href: '/dev', icon: Code2 },
+  { label: 'App Wallet', href: '/wallet', icon: Wallet },
+  { label: 'Agent Finance', href: '/wallet', icon: Landmark },
 ];
 
 export const Sidebar = () => {

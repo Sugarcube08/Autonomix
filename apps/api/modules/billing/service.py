@@ -237,3 +237,24 @@ async def withdraw_agent_funds(agent_id: str, requester_wallet: str):
         # Trigger Squads Withdrawal (Mock)
         logger.info(f"AgentOS: Initiating Squads withdrawal for treasury {agent.squads_vault_pda}")
         return True, "Withdrawal proposal initiated on Squads"
+
+async def withdraw_user_wallet_balance(db: AsyncSession, wallet_address: str, amount_sol: float):
+    """
+    Withdraws funds from the User's Layer 2 App Wallet back to their Layer 1 Solana wallet.
+    """
+    from backend.db.models.models import UserWallet
+    result = await db.execute(select(UserWallet).where(UserWallet.wallet_address == wallet_address))
+    user_wallet = result.scalars().first()
+    
+    if not user_wallet or user_wallet.balance < amount_sol:
+        return False, "Insufficient balance in App Wallet"
+        
+    # Protocol Call: Trigger real SOL transfer from Platform to User
+    ok, tx_sig = await transfer_sol(wallet_address, amount_sol)
+    
+    if ok:
+        user_wallet.balance -= amount_sol
+        await db.commit()
+        return True, tx_sig
+    else:
+        return False, tx_sig

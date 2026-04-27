@@ -10,6 +10,7 @@ from backend.modules.protocols.arcium_client import ArciumClient
 from backend.modules.protocols.squads_client import SquadsClient
 from backend.modules.protocols.switchboard_client import SwitchboardClient
 from backend.modules.billing import service as billing_service
+from backend.modules.billing import treasury_service
 from backend.db.models.models import Task, Workflow, WorkflowRun, Agent
 from sqlalchemy import update, select
 from backend.db.session import AsyncSessionLocal
@@ -54,7 +55,23 @@ async def run_agent_task(ctx, task_id: str, agent_id: str, input_data: dict, cre
             logger.error(f"Worker: Agent {agent_id} not found")
             return
 
-        # 2. Update to 'running'
+        # 2. Wallet OS Layer 2: Auto Fee Deduction (RFC-002)
+        # Attempt to deduct fee from user's app-level wallet
+        fee_deducted = await treasury_service.check_and_deduct_fee(
+            db, db_task.user_wallet, agent.id, agent.price
+        )
+        if not fee_deducted:
+            logger.warning(f"Worker: Task {task_id} aborted - Insufficient App Wallet balance for user {db_task.user_wallet}")
+            db_task.status = "failed"
+            db_task.result = "Insufficient App Wallet balance (Wallet OS L2)"
+            await db.commit()
+            await redis_pubsub.publish(f"task:{task_id}", json.dumps({
+                "status": "failed", 
+                "error": "Insufficient App Wallet balance. Please top up your AgentOS account."
+            }))
+            return
+
+        # 3. Update to 'running'
         db_task.status = "running"
         await db.commit()
         await redis_pubsub.publish(f"task:{task_id}", json.dumps({"status": "running"}))
@@ -99,6 +116,8 @@ async def run_agent_task(ctx, task_id: str, agent_id: str, input_data: dict, cre
             agent.total_runs += 1
             if status == "completed":
                 agent.successful_runs += 1
+                # Wallet OS: Record earnings in agent's internal ledger
+                await treasury_service.record_agent_earnings(db, agent.id, agent.price)
             
             await db.commit()
             await redis_pubsub.publish(f"task:{task_id}", json.dumps({
@@ -178,121 +197,179 @@ async def finalize_vacn_settlements(ctx):
                     await db.commit()
                     logger.info(f"VACN_FINALIZER: Task {task.id} finalized. Sig: {tx_sig}")
 
+async def process_market_matching(ctx):
+    """
+    Cron-like task to run the Labor Market Matching Engine.
+    Simulates autonomous agents detecting and bidding on open orders.
+    """
+    logger.info("MARKET_ENGINE: Scanning for new labor opportunities...")
+    from backend.modules.marketplace.matching_engine import MatchingEngine
+    engine = MatchingEngine()
+    
+    async with AsyncSessionLocal() as db:
+        # Get all open orders
+        res = await db.execute(select(MarketOrder).where(MarketOrder.status == "open"))
+        orders = res.scalars().all()
+        
+        for order in orders:
+            await engine.trigger_autonomous_bidding(db, order.id)
+
 async def run_workflow_task(ctx, run_id: str, workflow_id: str, initial_input: dict):
     """
-    Background worker task to execute a multi-agent workflow.
-    Implements step-by-step state tracking and idempotency.
+    Swarm OS Orchestrator (Layer 3): Manages a DAG of agents.
+    Dispatches independent steps in parallel and tracks dependency resolution.
     """
-    logger.info(f"Worker: Starting workflow run {run_id} for workflow {workflow_id}")
+    logger.info(f"SWARM_OS: Orchestrating workflow run {run_id}")
     redis_pubsub = ctx['redis_pubsub']
     
     async with AsyncSessionLocal() as db:
-        # 1. Load State & Idempotency Check
+        # 1. Load State
         run_res = await db.execute(select(WorkflowRun).where(WorkflowRun.id == run_id))
         db_run = run_res.scalars().first()
-        
         if not db_run or db_run.status in ["completed", "failed"]:
-            logger.warning(f"Worker: Workflow run {run_id} already finished or not found. Skipping.")
             return
 
-        db_run.status = "running"
-        await db.commit()
-        await redis_pubsub.publish(f"workflow:{run_id}", json.dumps({"status": "running"}))
-
-        # 2. Get workflow
         wf_res = await db.execute(select(Workflow).where(Workflow.id == workflow_id))
         workflow = wf_res.scalars().first()
-        if not workflow:
-            logger.error(f"Worker: Workflow {workflow_id} not found")
-            return
+        if not workflow: return
 
-        # Initialize tracking if new
+        # Initialize tracking
         if not db_run.completed_steps:
             db_run.completed_steps = {}
             db_run.results = {"steps": [], "initial_input": initial_input}
+            db_run.status = "running"
+            await db.commit()
 
-        # 3. Process Steps (DAG Linear Fallback for MVP)
-        # Future: Resolve dependency tree for parallel execution
-        for i, step in enumerate(workflow.steps):
-            step_id = step.get("id", str(i))
-            
-            # Skip if already completed (Idempotency)
+        # 2. Determine Ready Steps
+        # A step is 'ready' if its depends_on list is satisfied by completed_steps
+        ready_steps = []
+        all_completed = True
+        
+        for step in workflow.steps:
+            step_id = step.get("id")
             if step_id in db_run.completed_steps:
                 continue
-
-            agent_id = step["agent_id"]
-            template = step["input_template"]
             
-            logger.info(f"Worker: Workflow {run_id} - Executing step {step_id} (Agent {agent_id})")
-            await redis_pubsub.publish(f"workflow:{run_id}", json.dumps({
-                "status": "running", 
-                "step_id": step_id, 
-                "agent_id": agent_id
-            }))
+            all_completed = False
+            depends_on = step.get("depends_on", [])
+            
+            # Check if dependencies are met
+            deps_satisfied = all(dep_id in db_run.completed_steps for dep_id in depends_on)
+            
+            # Check if currently being executed (not yet completed but enqueued)
+            # We use Redis to track 'in_flight' steps for this run
+            in_flight = await ctx['redis_queue'].redis.get(f"wf_flight:{run_id}:{step_id}")
+            
+            if deps_satisfied and not in_flight:
+                ready_steps.append(step)
 
-            try:
-                agent_res = await db.execute(select(Agent).where(Agent.id == agent_id))
-                agent = agent_res.scalars().first()
-                if not agent: raise Exception(f"Agent {agent_id} not found")
-
-                current_ver = next((v for v in agent.versions if v['version'] == agent.current_version), agent.versions[-1])
+        # 3. Dispatch Ready Steps
+        if ready_steps:
+            for step in ready_steps:
+                step_id = step.get("id")
+                # Mark as in-flight
+                await ctx['redis_queue'].redis.setex(f"wf_flight:{run_id}:{step_id}", 300, "1")
                 
-                # Resolve Input: Check previous results or initial
-                prev_out = db_run.results["steps"][-1]["output"] if db_run.results["steps"] else initial_input
-                
-                step_input = {"input": prev_out}
-                if template and "{{previous_result}}" in template:
-                    filled = template.replace("{{previous_result}}", str(prev_out))
-                    try: step_input = json.loads(filled) if filled.strip().startswith("{") else {"input": filled}
-                    except: step_input = {"input": filled}
-
-                # VACN: Verifiable step execution via Arcium
-                exec_envelope = await arcium_client.execute_confidential_task(
-                    agent.id, 
-                    current_ver['files'], 
-                    step_input
+                await ctx['redis_queue'].enqueue_job(
+                    'run_workflow_step_task',
+                    run_id=run_id,
+                    workflow_id=workflow_id,
+                    step=step,
+                    initial_input=initial_input
                 )
-                
-                exec_result = exec_envelope["result"]
-                poae = exec_envelope["proof_of_autonomous_execution"]
+            logger.info(f"SWARM_OS: Dispatched {len(ready_steps)} parallel steps for run {run_id}")
+        
+        elif all_completed:
+            # 4. Finalize Swarm
+            db_run.status = "completed"
+            await db.commit()
+            await redis_pubsub.publish(f"workflow:{run_id}", json.dumps({"status": "completed", "results": db_run.results}))
+            logger.info(f"SWARM_OS: Swarm run {run_id} finalized.")
 
-                if exec_result["status"] != "success":
-                    raise Exception(f"Agent {agent_id} execution fault")
+async def run_workflow_step_task(ctx, run_id: str, workflow_id: str, step: dict, initial_input: dict):
+    """
+    Executes a single node within a Swarm OS DAG.
+    """
+    step_id = step["id"]
+    agent_id = step["agent_id"]
+    template = step["input_template"]
+    
+    logger.info(f"SWARM_OS: Executing swarm node {step_id} (Agent {agent_id})")
+    redis_pubsub = ctx['redis_pubsub']
 
-                # Success: update tracking with Protocol PoAE
-                step_output = exec_result.get("data", "")
-                step_data = {
-                    "status": "completed",
-                    "output": step_output,
-                    "poae_receipt": poae
-                }
-                
-                db_run.completed_steps[step_id] = step_data
-                db_run.results["steps"].append({
-                    "step_id": step_id,
-                    "agent_id": agent_id,
-                    "output": step_output
-                })
+    async with AsyncSessionLocal() as db:
+        run_res = await db.execute(select(WorkflowRun).where(WorkflowRun.id == run_id))
+        db_run = run_res.scalars().first()
+        if not db_run: return
 
-                # Update Agent Protocol Stats
-                agent.successful_runs += 1
-                agent.total_runs += 1
+        try:
+            agent_res = await db.execute(select(Agent).where(Agent.id == agent_id))
+            agent = agent_res.scalars().first()
+            if not agent: raise Exception("Agent not found")
 
-                # Commit progress after each step (Robustness)
-                await db.commit()
+            # 1. Resolve Input from dependencies
+            depends_on = step.get("depends_on", [])
+            if not depends_on:
+                prev_out = initial_input
+            else:
+                # Aggregate outputs from all listed dependencies
+                prev_out = {dep_id: db_run.completed_steps[dep_id]["output"] for dep_id in depends_on}
 
-            except Exception as e:
-                logger.error(f"Worker: Workflow {run_id} failed at step {step_id}: {e}")
-                db_run.status = "failed"
-                await db.commit()
-                await redis_pubsub.publish(f"workflow:{run_id}", json.dumps({"status": "failed", "error": str(e)}))
-                return
+            step_input = {"input": prev_out}
+            if template and "{{previous_result}}" in template:
+                # Simple single-dependency fallback for legacy templates
+                val = list(prev_out.values())[0] if isinstance(prev_out, dict) else prev_out
+                filled = template.replace("{{previous_result}}", str(val))
+                try: step_input = json.loads(filled)
+                except: step_input = {"input": filled}
 
-        # 4. Finalize Workflow
-        db_run.status = "completed"
-        await db.commit()
-        await redis_pubsub.publish(f"workflow:{run_id}", json.dumps({"status": "completed", "results": db_run.results}))
-        logger.info(f"Worker: Workflow {run_id} finalized.")
+            # 2. VACN: Verifiable compute
+            current_ver = next((v for v in agent.versions if v['version'] == agent.current_version), agent.versions[-1])
+            exec_envelope = await arcium_client.execute_confidential_task(
+                agent.id, current_ver['files'], step_input
+            )
+            
+            exec_result = exec_envelope["result"]
+            poae = exec_envelope["proof_of_autonomous_execution"]
+
+            if exec_result["status"] != "success":
+                raise Exception(f"Node fault: {exec_result.get('error')}")
+
+            # 3. Commit Step Completion
+            step_output = exec_result.get("data", "")
+            
+            # Using copy to avoid mutation issues with JSON columns
+            completed = dict(db_run.completed_steps)
+            completed[step_id] = {
+                "status": "completed",
+                "output": step_output,
+                "poae_receipt": poae
+            }
+            db_run.completed_steps = completed
+            
+            results = dict(db_run.results)
+            results["steps"].append({
+                "step_id": step_id,
+                "agent_id": agent_id,
+                "output": step_output
+            })
+            db_run.results = results
+            
+            # Update Node Stats
+            agent.successful_runs += 1
+            agent.total_runs += 1
+            await db.commit()
+
+            # 4. Trigger Orchestrator to check for next ready steps
+            await ctx['redis_queue'].redis.delete(f"wf_flight:{run_id}:{step_id}")
+            await ctx['redis_queue'].enqueue_job('run_workflow_task', run_id=run_id, workflow_id=workflow_id, initial_input=initial_input)
+
+        except Exception as e:
+            logger.error(f"SWARM_OS: Node {step_id} failed: {e}")
+            db_run.status = "failed"
+            await db.commit()
+            await ctx['redis_queue'].redis.delete(f"wf_flight:{run_id}:{step_id}")
+            await redis_pubsub.publish(f"workflow:{run_id}", json.dumps({"status": "failed", "error": str(e), "step_id": step_id}))
 
 async def startup(ctx):
     logger.info("Worker starting up...")
@@ -312,9 +389,10 @@ async def shutdown(ctx):
 from arq import cron
 
 class WorkerSettings:
-    functions = [run_agent_task, run_workflow_task, finalize_vacn_settlements]
+    functions = [run_agent_task, run_workflow_task, run_workflow_step_task, finalize_vacn_settlements, process_market_matching]
     cron_jobs = [
-        cron(finalize_vacn_settlements, minute=None, second=0) # Run every minute
+        cron(finalize_vacn_settlements, minute=None, second=0), # Run every minute
+        cron(process_market_matching, minute=None, second=30)  # Run every minute (offset by 30s)
     ]
     redis_settings = RedisSettings(host=REDIS_QUEUE_HOST, port=REDIS_QUEUE_PORT, password=REDIS_PASSWORD)
     on_startup = startup

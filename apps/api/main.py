@@ -9,6 +9,8 @@ from backend.modules.auth.routes import router as auth_router
 from backend.modules.agents.routes import router as agents_router
 from backend.modules.billing.routes import router as billing_router
 from backend.modules.workflows.routes import router as workflows_router
+from backend.modules.marketplace.routes import router as marketplace_router
+from backend.modules.protocols.routes import router as protocol_router
 from backend.modules.auth.middleware import X402PaymentMiddleware
 from arq import create_pool
 from arq.connections import RedisSettings
@@ -51,7 +53,10 @@ async def lifespan(app: FastAPI):
         try:
             async with engine.begin() as conn:
                 # 1. Ensure tables exist
-                from backend.db.models.models import Agent, Task, Payment
+                from backend.db.models.models import (
+                    Agent, Task, Payment, MarketOrder, Bid, Dispute, UserWallet,
+                    AgentCredit, AgentLoan, AgentBond, ProtocolProposal, ExecutorStake
+                )
                 await conn.run_sync(Base.metadata.create_all)
                 
                 # 2. Manual Migration: Add protocol columns if they don't exist
@@ -62,6 +67,8 @@ async def lifespan(app: FastAPI):
                     await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS credential_registry_address VARCHAR"))
                     await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS total_runs FLOAT DEFAULT 0"))
                     await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS successful_runs FLOAT DEFAULT 0"))
+                    await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS balance FLOAT DEFAULT 0"))
+                    await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS total_earnings FLOAT DEFAULT 0"))
                     
                     # Task Table Protocol Fields
                     await conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS poae_hash VARCHAR"))
@@ -105,6 +112,8 @@ app.include_router(auth_router, prefix="/auth", tags=["auth"])
 app.include_router(agents_router, prefix="/agents", tags=["agents"])
 app.include_router(billing_router, prefix="/billing", tags=["billing"])
 app.include_router(workflows_router, prefix="/workflows", tags=["workflows"])
+app.include_router(marketplace_router, prefix="/marketplace", tags=["marketplace"])
+app.include_router(protocol_router, prefix="/protocol", tags=["protocol"])
 
 @app.websocket("/ws/tasks/{task_id}")
 async def websocket_endpoint(websocket: WebSocket, task_id: str):
