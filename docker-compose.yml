@@ -3,7 +3,7 @@ services:
     image: postgres:15-alpine
     environment:
       POSTGRES_USER: shoujiki
-      POSTGRES_PASSWORD: shoujiki
+      POSTGRES_PASSWORD: shoujiki_v3_secure_db_2026
       POSTGRES_DB: shoujiki
     ports:
       - "5432:5432"
@@ -27,13 +27,16 @@ services:
       context: ./apps/api
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgresql+asyncpg://shoujiki:shoujiki@db:5432/shoujiki
+      DATABASE_URL: postgresql+asyncpg://shoujiki:shoujiki_v3_secure_db_2026@db:5432/shoujiki
       REDIS_QUEUE_HOST: redis-queue
       REDIS_PUBSUB_HOST: redis-pubsub
-      REDIS_PASSWORD: shoujiki
+      REDIS_PASSWORD: shoujiki_v3_secure_redis_2026
       SANDBOX_URL: http://sandbox:8001
       PYTHONPATH: /app/api
-      SECRET_KEY: "shoujiki-secret-key-change-in-production"
+      SECRET_KEY: "change-this-to-a-secure-random-string-in-production"
+      PLATFORM_SECRET_SEED: "shoujiki_platform_secret_seed_32_chars"
+      SQUADS_MULTISIG_PDA: "GcUqEvuzyvTPZi38wqtFSvoDwT3yuc8gYCAmCJgyRyG5"
+      SOLANA_RPC_URL: "https://api.devnet.solana.com"
     depends_on:
       - db
       - redis-queue
@@ -47,12 +50,14 @@ services:
       dockerfile: Dockerfile
     command: python3 -m arq backend.core.tasks.WorkerSettings
     environment:
-      DATABASE_URL: postgresql+asyncpg://shoujiki:shoujiki@db:5432/shoujiki
+      DATABASE_URL: postgresql+asyncpg://shoujiki:shoujiki_v3_secure_db_2026@db:5432/shoujiki
       REDIS_QUEUE_HOST: redis-queue
       REDIS_PUBSUB_HOST: redis-pubsub
       REDIS_PASSWORD: shoujiki_v3_secure_redis_2026
       SANDBOX_URL: http://sandbox:8001
       PYTHONPATH: /app/api
+      PLATFORM_SECRET_SEED: "shoujiki_platform_secret_seed_32_chars"
+      SOLANA_RPC_URL: "https://api.devnet.solana.com"
     depends_on:
       - db
       - redis-queue
