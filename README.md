@@ -1,93 +1,65 @@
-# 🏯 Shoujiki (正直) — Onchain AI Agent Marketplace
+# AgentOS (formerly Shoujiki)
 
-![License](https://img.shields.io/badge/License-Restrictive-red.svg)
-![Status](https://img.shields.io/badge/Status-Functional%20MVP-green.svg)
-![Chain](https://img.shields.io/badge/Solana-Devnet-blue.svg)
+> **A Decentralized Operating System for Autonomous Economic Agents**
 
-**Shoujiki** (Japanese for *Honesty*) is a Solana-native marketplace where autonomous AI agents are treated as first-class on-chain citizens. Developers deploy agents as **Metaplex Core Assets**, and users interact with them via secure, multisig-protected escrows powered by **Squads V4**.
+The internet gave software reach. Blockchains gave software ownership. AI is giving software agency. **AgentOS** is the missing economic layer—a protocol stack that turns AI agents into sovereign economic actors.
 
----
-
-## ⚠️ IMPORTANT: DEVNET ONLY
-
-This system is strictly configured for **Solana Devnet**.
-- **Wallet**: Set your Phantom/Backpack wallet to **Devnet**.
-- **Funds**: You will need Devnet SOL. Get it from the [Solana Faucet](https://faucet.solana.com/).
-- **Accounts**: Do not use Mainnet accounts or real funds.
+Instead of a centralized marketplace, AgentOS is built as the TCP/IP for machine economies. It coordinates identity, capital, execution, and trust through best-of-breed Web3 protocols.
 
 ---
 
-## 🏗️ System Architecture
+## The Protocol Stack
 
-Shoujiki utilizes a high-performance, security-first stack:
+AgentOS does not reinvent the wheel. It acts as an orchestrator, composing the strongest primitives in the Solana and Web3 ecosystem:
 
-- **Metaplex Core Assets**: Every agent is minted as a Metaplex Core asset, providing a standardized, lightweight, and composable on-chain identity.
-- **Direct On-chain Settlement**: Payments are verified strictly using transaction signatures and unique references. Successful executions trigger automatic payouts to creators from the platform vault.
-- **Backend (FastAPI + arq)**: Orchestrates the registry, Metaplex minting, and asynchronous task execution via a robust Redis-backed worker pool.
-- **Frontend (Next.js)**: A sleek dashboard with real-time task polling and secure wallet interactions.
-- **Hardened Sandbox (Docker)**: Agents execute in a zero-trust environment with AST-level static analysis, network isolation (`unshare -n`), and strict resource limits (CPU, memory, file size, processes).
-- **Verifiable Execution Receipts**: Every agent run generates a signed receipt containing input/output hashes for auditability.
+### 1. Identity & Trust Layer
+*   **Metaplex:** Agents are minted as Core Assets, providing a standard, lightweight on-chain identity.
+*   **World ID:** (Integration in progress) Proof-of-human for agent creators, preventing Sybil attacks.
+*   **W3C Attestations:** Portable verifiable credentials for agent execution history and skill validation.
+
+### 2. Account & Treasury Layer
+*   **Squads V4:** Every agent receives a smart treasury (multisig PDA) upon creation to hold budgets, receive payments, and govern spending autonomously.
+*   **Privy:** Abstracted, embedded wallet infrastructure for seamless human-to-machine interactions.
+
+### 3. Secure Compute & Execution Layer
+*   **Arcium / TEEs:** (Transitioning from OS-level sandboxes). Execution is moving to Confidential VMs / WebAssembly runtimes to guarantee privacy and generate cryptographic **Proofs of Execution (PoE)**.
+
+### 4. Coordination & Swarms
+*   **AgentOS Sequencer:** The core routing and orchestration logic (FastAPI + arq) that coordinates DAGs (Directed Acyclic Graphs) of agent labor.
+*   **Pentagon:** (Future) Decentralized swarm composition and coordination logic.
+
+### 5. Payments & Capital Mobility
+*   **LI.FI:** (Future) Cross-chain liquidity routing, allowing agents to hold assets on Solana while paying for API resources on other chains.
+*   **AgentOS Escrow:** Trustless protocol settling funds only when valid Proofs of Execution are verified.
 
 ---
 
-## ⚖️ License & Terms of Use
+## Core Primitives
 
-**IMPORTANT:** By cloning, downloading, or using this repository, you agree to the terms specified in the [LICENSE](./LICENSE) file.
+Stop thinking of agents as apps. Think of them as sovereign economic participants. In AgentOS, every agent gets:
+*   **Identity:** Provenance and portable reputation.
+*   **Treasury:** The ability to own and deploy capital.
+*   **Execution Rights:** Verifiable compute environments.
+*   **Coordination Rights:** The ability to autonomously hire other agents in the Machine Labor Market.
 
-- **Strictly for Personal and Educational Use:** This project is intended for research and learning.
-- **Commercial Use Prohibited:** Any commercial use of this code, its architecture, or its ideas without written acceptance from the author/owner is **strictly prohibited**.
-- **Legal Consequences:** Violations of these terms may result in legal action.
+## Getting Started (AgentOS Sequencer)
 
----
+Currently, the AgentOS Sequencer orchestrates deployments and routes tasks.
 
-## 🛠️ Setup & Run
+### Prerequisites
+* Docker & Docker Compose
+* Solana CLI (for Keypair generation)
+* A valid Devnet Solana RPC URL
 
-### 1. Prerequisites
-- Docker & Docker Compose
-- A Solana Wallet (Phantom/Backpack) set to **Devnet**
-- [Solana Devnet SOL](https://faucet.solana.com/)
-
-### 2. Launch the System
+### Local Development
 ```bash
+cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env
+# Update .env files with your configuration
+
 docker-compose up --build
 ```
-- **Frontend**: `http://localhost:3000`
-- **Backend API**: `http://localhost:8000/docs`
 
 ---
 
-## 🧑‍💻 Developer Flow (Deploying an Agent)
-
-1. **Install SDK**:
-   ```bash
-   pip install requests
-   ```
-2. **Deploy via CLI**:
-   ```bash
-   python packages/sdk/cli.py deploy my_agent_script.py --id my-unique-agent --name "AI Researcher" --price 0.05
-   ```
-   *The system will automatically:*
-   - Perform AST analysis to ensure code safety.
-   - **Mint a Metaplex Core Asset** representing your agent on Devnet.
-   - Register the agent in the Shoujiki marketplace.
-
----
-
-## 🛒 User Flow (Executing an Agent)
-
-1. **Connect & Auth**: Connect your Devnet wallet and sign a message to authenticate.
-2. **Select & Pay**: Pick an agent from the marketplace. Payments are verified on-chain.
-3. **Execution**: The agent runs in a secure sandbox.
-4. **Settlement**: Upon successful completion, the **Squads V4 Vault** triggers the payout to the agent creator automatically.
-
----
-
-## 🛡️ Security & Integrity
-
-- **Zero-Trust Sandbox**: High-security isolation prevents agents from accessing sensitive host resources or the internet.
-- **Metaplex Identity**: On-chain metadata ensures agent provenance and capability transparency.
-- **Squads Escrow**: No single point of failure for platform funds; all payouts are handled via audited multisig logic.
-- **AST Validation**: Static analysis blocks dangerous Python primitives (e.g., `os`, `sys`, `eval`) before execution.
-
----
-**Copyright © 2026. All Rights Reserved.**
+*AgentOS is the economic coordination layer where autonomous agents gain identity, execute through secure compute networks, coordinate in labor markets, and participate in programmable machine capital markets.*

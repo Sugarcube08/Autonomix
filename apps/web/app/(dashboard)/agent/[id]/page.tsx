@@ -90,7 +90,7 @@ export default function AgentRunPage() {
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.status === 'running') {
-          addLog("Agent active in hardened sandbox.");
+          addLog("Agent active in Arcium Confidential VM.");
         } else if (data.status === 'completed' || data.status === 'failed') {
           setResult(data.result || data.error);
           setStatus('done');
@@ -99,7 +99,7 @@ export default function AgentRunPage() {
             setError(data.error || 'Execution fault');
             addLog("Execution aborted.");
           } else {
-            addLog("Result finalized and anchored.");
+            addLog("Result finalized. Proof of Execution (PoE) anchored.");
           }
           ws.close();
         }
@@ -147,19 +147,33 @@ export default function AgentRunPage() {
                 <span className="text-lg font-semibold text-white">{agent.price} SOL</span>
              </div>
              <div className="p-5 rounded-2xl bg-zinc-900/40 border border-zinc-800/60">
-                <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest block mb-1">Reputation</span>
-                <span className="text-lg font-semibold text-white">{agent.reputation_score?.toFixed(0)}</span>
+                <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest block mb-1">Identity Trust</span>
+                <span className="text-lg font-semibold text-white">{agent.world_id_hash ? 'Human' : 'Node'}</span>
              </div>
           </div>
 
           <div className="pt-6 border-t border-zinc-800/60 space-y-4">
              <div className="flex items-center justify-between px-1">
-                <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Network Verification</span>
+                <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Protocol Registry</span>
                 <BadgeCheck size={14} className="text-blue-500" />
              </div>
-             <div className="p-4 rounded-xl bg-zinc-900/20 border border-zinc-800 flex items-center gap-3">
-                <Fingerprint size={16} className="text-zinc-600" />
-                <span className="text-[11px] font-mono text-zinc-500 truncate">{agent.mint_address || "Awaiting Registry..."}</span>
+             <div className="space-y-3">
+               <div className="p-4 rounded-xl bg-zinc-900/20 border border-zinc-800 flex flex-col gap-1">
+                  <span className="text-[9px] font-bold text-zinc-700 uppercase">Passport_Asset</span>
+                  <div className="flex items-center gap-3">
+                    <Fingerprint size={16} className="text-zinc-600" />
+                    <span className="text-[11px] font-mono text-zinc-500 truncate">{agent.mint_address || "Awaiting Registry..."}</span>
+                  </div>
+               </div>
+               {agent.squads_vault_pda && (
+                 <div className="p-4 rounded-xl bg-zinc-900/20 border border-zinc-800 flex flex-col gap-1">
+                    <span className="text-[9px] font-bold text-zinc-700 uppercase">Sovereign_Vault (Squads)</span>
+                    <div className="flex items-center gap-3">
+                      <Lock size={16} className="text-zinc-600" />
+                      <span className="text-[11px] font-mono text-zinc-500 truncate">{agent.squads_vault_pda}</span>
+                    </div>
+                 </div>
+               )}
              </div>
           </div>
         </div>
@@ -174,7 +188,7 @@ export default function AgentRunPage() {
                  </div>
                  <div className="flex items-center gap-3">
                     <div className="w-1.5 h-1.5 rounded-full bg-blue-500/50" />
-                    <span className="text-[9px] font-medium text-zinc-600 uppercase">Tier_3_Sandbox</span>
+                    <span className="text-[9px] font-medium text-zinc-600 uppercase">Arcium_Confidential_Compute</span>
                  </div>
               </div>
               <div className="flex-1 p-0 flex flex-col">

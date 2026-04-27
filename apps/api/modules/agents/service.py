@@ -2,10 +2,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from backend.db.models.models import Agent
 from backend.schemas.agent import AgentCreate
+from backend.modules.protocols.squads_client import SquadsClient
+from backend.modules.protocols.world_id_client import WorldIDClient
 import hashlib
 import logging
 
 logger = logging.getLogger(__name__)
+
+squads_client = SquadsClient()
+world_id_client = WorldIDClient()
 
 async def create_agent(db: AsyncSession, agent_data: AgentCreate, creator_wallet: str):
     # Check if agent exists
@@ -38,7 +43,16 @@ async def create_agent(db: AsyncSession, agent_data: AgentCreate, creator_wallet
         db_agent.description = agent_data.description
         db_agent.price = agent_data.price
     else:
-        # Create new agent with NATIVE Metaplex Core Minting
+        # AgentOS Protocol: Identity & Treasury Provisioning
+        
+        # 1. World ID: Verify creator provenance (Proof of Human)
+        # In a real flow, the ZKP would be passed from the frontend
+        world_id_hash = await world_id_client.verify_human_creator(creator_wallet, {"mock": "proof"})
+        
+        # 2. Squads V4: Deploy Sovereign Agent Treasury
+        squads_pda = await squads_client.deploy_agent_treasury(agent_data.id, creator_wallet)
+
+        # 3. Metaplex Core: Mint Agent Passport (Identity Asset)
         from solders.keypair import Keypair
         from solders.instruction import Instruction, AccountMeta
         from solders.transaction import VersionedTransaction
@@ -56,19 +70,17 @@ async def create_agent(db: AsyncSession, agent_data: AgentCreate, creator_wallet
         mint_address = str(asset_keypair.pubkey())
         
         try:
-            logger.info(f"Metaplex: Minting native agent asset {mint_address} for {agent_data.name}")
+            logger.info(f"Metaplex: Minting Agent Passport {mint_address} for {agent_data.name}")
             
-            # Construct Metaplex Core 'Create' Instruction (Manual Buffer)
-            # Discriminator for Create is 0
-            # Layout: [discriminator(1), name_len(4), name(name_len), uri_len(4), uri(uri_len), ...]
+            # Construct Metaplex Core 'Create' Instruction
             name_bytes = agent_data.name.encode()
+            # URI points to the AgentOS metadata registry
             uri = f"https://api.shoujiki.ai/agents/{agent_data.id}/metadata"
             uri_bytes = uri.encode()
             
             data = struct.pack("B", 0) # Discriminator
             data += struct.pack("<I", len(name_bytes)) + name_bytes
             data += struct.pack("<I", len(uri_bytes)) + uri_bytes
-            # plugins, etc (omitted for simple demo)
             
             ix = Instruction(
                 program_id=CORE_PROGRAM_ID,
@@ -77,7 +89,7 @@ async def create_agent(db: AsyncSession, agent_data: AgentCreate, creator_wallet
                     AccountMeta(pubkey=asset_keypair.pubkey(), is_signer=True, is_writable=True),
                     AccountMeta(pubkey=platform_keypair.pubkey(), is_signer=True, is_writable=True),
                     AccountMeta(pubkey=platform_keypair.pubkey(), is_signer=True, is_writable=False),
-                    AccountMeta(pubkey=Pubkey.from_string("11111111111111111111111111111111"), is_signer=False, is_writable=False), # System Program
+                    AccountMeta(pubkey=Pubkey.from_string("11111111111111111111111111111111"), is_signer=False, is_writable=False),
                 ]
             )
 
@@ -91,11 +103,11 @@ async def create_agent(db: AsyncSession, agent_data: AgentCreate, creator_wallet
                 )
                 tx = VersionedTransaction(msg, [platform_keypair, asset_keypair])
                 resp = await client.send_transaction(tx)
-                logger.info(f"Metaplex: Native mint successful: {resp.value}")
+                logger.info(f"Metaplex: Passport mint successful: {resp.value}")
 
         except Exception as e:
-            logger.error(f"Metaplex: Native minting failed (using fallback ID): {e}", exc_info=True)
-            mint_address = f"asset_{hashlib.sha256(agent_data.id.encode()).hexdigest()[:32]}"
+            logger.error(f"Metaplex: Passport minting failed (using fallback): {e}")
+            mint_address = f"passport_{hashlib.sha256(agent_data.id.encode()).hexdigest()[:32]}"
 
         db_agent = Agent(
             id=agent_data.id,
@@ -105,9 +117,16 @@ async def create_agent(db: AsyncSession, agent_data: AgentCreate, creator_wallet
             current_version=agent_data.version,
             price=agent_data.price,
             creator_wallet=creator_wallet,
-            mint_address=mint_address
+            mint_address=mint_address,
+            squads_vault_pda=squads_pda,
+            world_id_hash=world_id_hash
         )
         db.add(db_agent)
+    
+    await db.commit()
+    await db.refresh(db_agent)
+    return db_agent
+
     
     await db.commit()
     await db.refresh(db_agent)

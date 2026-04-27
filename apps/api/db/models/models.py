@@ -13,18 +13,15 @@ class Agent(Base):
     price = Column(Float, nullable=False)
     creator_wallet = Column(String, nullable=False, index=True)
     mint_address = Column(String, nullable=True, index=True) # Metaplex Core Asset Address
+    
+    # Execution Stats
     total_runs = Column(Float, nullable=False, default=0)
     successful_runs = Column(Float, nullable=False, default=0)
     
-    # Reputation Graph / Trust Fields
-    reputation_score = Column(Float, nullable=False, default=100.0)
-    reliability_score = Column(Float, nullable=False, default=1.0)
-    contribution_score = Column(Float, nullable=False, default=0.0) # For Swarm involvement
-    trust_level = Column(String, default="verified") # verified, trusted, elite
-    
-    # Treasury Fields
-    balance = Column(Float, nullable=False, default=0.0)
-    treasury_address = Column(String, nullable=True) # PDA or sub-wallet
+    # Protocol Integration Fields (AgentOS Level-Up)
+    world_id_hash = Column(String, nullable=True) # World ID: Proof of human for creator
+    squads_vault_pda = Column(String, nullable=True) # Squads V4: Agent's sovereign treasury
+    credential_registry_address = Column(String, nullable=True) # W3C Attestations / On-chain Identity Graph
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -43,6 +40,7 @@ class Task(Base):
     escrow_pda = Column(String, nullable=True)
     settlement_signature = Column(String, nullable=True)
     execution_receipt = Column(JSON, nullable=True) 
+    execution_proof_hash = Column(String, nullable=True) # Arcium / TEE Cryptographic Proof of Execution
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

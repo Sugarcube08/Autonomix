@@ -1,18 +1,17 @@
+import hashlib
+import json
 import asyncio
+import logging
+import uuid
+import os
 from arq import create_pool
 from arq.connections import RedisSettings
-import os
-import logging
-import json
-import hashlib
-from backend.modules.sandbox.client import execute_in_sandbox
-from backend.db.session import AsyncSessionLocal
-from sqlalchemy.ext.asyncio import AsyncSession
-from backend.modules.agents import service as agent_service
+from backend.modules.protocols.arcium_client import ArciumClient
+from backend.modules.protocols.squads_client import SquadsClient
 from backend.modules.billing import service as billing_service
 from backend.db.models.models import Task, Workflow, WorkflowRun, Agent
 from sqlalchemy import update, select
-import uuid
+from backend.db.session import AsyncSessionLocal
 
 from backend.core.config import (
     REDIS_QUEUE_HOST, REDIS_QUEUE_PORT, 
@@ -22,180 +21,114 @@ from backend.core.config import (
 
 logger = logging.getLogger(__name__)
 
+arcium_client = ArciumClient()
+squads_client = SquadsClient()
+
 async def run_agent_task(ctx, task_id: str, agent_id: str, input_data: dict, creator_wallet: str, price: float, depth: int = 0):
     """
-    Background worker task to execute agent in sandbox and settle payment on-chain.
-    Implements idempotency and fail-closed security.
-    """
-    """
-    Background worker task to execute agent in sandbox and settle payment.
+    AgentOS Protocol Worker: Executes agent in a Confidential VM (Arcium) 
+    and generates a cryptographic Proof of Execution (PoE).
     """
     if depth > 3:
         logger.error(f"Worker: Task {task_id} exceeded recursion depth {depth}. Aborting.")
         return
 
-    logger.info(f"Worker: Starting task {task_id} for agent {agent_id} (depth: {depth})")
+    logger.info(f"Worker: Starting AgentOS task {task_id} (depth: {depth})")
     redis_pubsub = ctx['redis_pubsub']
     
     async with AsyncSessionLocal() as db:
-        # 1. Idempotency Check & Status Update
+        # 1. Load Task State
         task_res = await db.execute(select(Task).where(Task.id == task_id))
         db_task = task_res.scalars().first()
         
-        if not db_task:
-            logger.error(f"Worker: Task {task_id} not found in database.")
-            return
-            
-        if db_task.status in ["completed", "failed", "settled"]:
-            logger.warning(f"Worker: Task {task_id} already in final state: {db_task.status}. Skipping.")
+        if not db_task or db_task.status in ["completed", "failed", "settled"]:
+            logger.warning(f"Worker: Task {task_id} skipping (state: {db_task.status if db_task else 'not found'})")
             return
 
-        # Get agent for metadata
         agent_res = await db.execute(select(Agent).where(Agent.id == agent_id))
         agent = agent_res.scalars().first()
         
         if not agent:
             logger.error(f"Worker: Agent {agent_id} not found")
-            db_task.status = "failed"
-            db_task.result = "Agent configuration not found"
-            await db.commit()
             return
 
-        # Update to 'running'
+        # 2. Update to 'running'
         db_task.status = "running"
         await db.commit()
         await redis_pubsub.publish(f"task:{task_id}", json.dumps({"status": "running"}))
 
-        current_ver = next((v for v in agent.versions if v['version'] == agent.current_version), agent.versions[-1])
-        
-        # 3. Execute in sandbox
+        # 3. AgentOS Execution: Verifiable Compute (Arcium)
         try:
-            exec_result = await execute_in_sandbox(
-                files=current_ver['files'],
-                requirements=current_ver['requirements'],
-                entrypoint=current_ver['entrypoint'],
-                input_data=input_data
-            )
+            current_ver = next((v for v in agent.versions if v['version'] == agent.current_version), agent.versions[-1])
+            code_hash = hashlib.sha256(json.dumps(current_ver['files']).encode()).hexdigest()
             
-            # 4. Update task result and generate receipt
-            status = "completed" if exec_result["success"] else "failed"
-            result = exec_result["output"] if exec_result["success"] else exec_result["error"]
+            # Execute in Arcium (Confidential VM)
+            exec_envelope = await arcium_client.execute_confidential_task(code_hash, input_data)
             
+            exec_result = exec_envelope["result"]
+            poe = exec_envelope["proof_of_execution"] # The cryptographic PoE
+            
+            status = "completed" if exec_result["status"] == "success" else "failed"
+            result_data = exec_result.get("data", "")
+            
+            # 4. Generate Protocol Receipt
             receipt = {
                 "task_id": task_id,
                 "agent_id": agent_id,
                 "input_hash": hashlib.sha256(json.dumps(input_data).encode()).hexdigest(),
-                "output_hash": hashlib.sha256(result.encode()).hexdigest() if result else None,
-                "success": exec_result["success"],
-                "timestamp": str(asyncio.get_event_loop().time()) # Placeholder for real time
+                "poe_signature": poe,
+                "timestamp": str(asyncio.get_event_loop().time())
             }
 
+            # 5. Update Task with PoE
             await db.execute(
                 update(Task).where(Task.id == task_id).values(
                     status=status, 
-                    result=result,
-                    execution_receipt=receipt
+                    result=json.dumps(result_data),
+                    execution_receipt=receipt,
+                    execution_proof_hash=poe
                 )
             )
             
-            # Update Agent Passport (Reputation/Reliability)
+            # Update Agent Execution Stats
             agent.total_runs += 1
-            if exec_result["success"]:
+            if status == "completed":
                 agent.successful_runs += 1
-                
-                # Price-weighted reputation gain (min 0.1, proportional to price)
-                # Helps prevent Sybil/farming with very cheap tasks
-                gain = max(0.1, price * 100.0) 
-                agent.reputation_score += min(5.0, gain) # Cap gain per run
-                
-                # Dynamic Trust Leveling
-                if agent.successful_runs >= 50:
-                    agent.trust_level = "elite"
-                elif agent.successful_runs >= 10:
-                    agent.trust_level = "trusted"
-            else:
-                agent.reputation_score -= 10.0 # Heavier penalty for failure
-            
-            # Ensure boundaries
-            agent.reputation_score = max(0.0, min(200.0, agent.reputation_score))
-            agent.reliability_score = agent.successful_runs / agent.total_runs
             
             await db.commit()
-            await redis_pubsub.publish(f"task:{task_id}", json.dumps({"status": status, "result": result}))
+            await redis_pubsub.publish(f"task:{task_id}", json.dumps({"status": status, "result": result_data}))
             
-            # 4. M2M Bridge Handling (Agent hiring Agent)
-            from backend.modules.billing.service import PLATFORM_WALLET
+            # 6. AgentOS Machine Economy: True M2M Hiring via Squads
             hire_requests = exec_result.get("hire_requests", [])
             for hire in hire_requests:
                 hired_id = hire.get("agent_id")
                 hired_input = hire.get("input_data")
+                new_task_id = f"m2m_{task_id[:8]}_{uuid.uuid4().hex[:6]}"
                 
-                # Generate a globally unique M2M Task ID
-                new_task_id = f"m2m_{task_id[:8]}_{hired_id[:8]}_{uuid.uuid4().hex[:6]}"
-                logger.info(f"Worker: M2M Bridge - Agent {agent_id} hiring {hired_id}. New Task: {new_task_id}")
-                
-                hired_agent_res = await db.execute(select(Agent).where(Agent.id == hired_id))
-                hired_agent = hired_agent_res.scalars().first()
-                
-                if hired_agent:
-                    # Create the protocol task record
-                    new_task = Task(
-                        id=new_task_id,
-                        agent_id=hired_id,
-                        user_wallet=PLATFORM_WALLET, # Platform pre-funds M2M demo escrows
-                        input_data=json.dumps(hired_input),
-                        status="queued",
-                        depth=depth + 1
-                    )
-                    db.add(new_task)
-                    await db.commit()
-                    
-                    # NOTE: In V4, the hiring agent's treasury would sign this escrow.
-                    # For V3 Alpha demo, the platform pre-funds the M2M task execution.
-                    
-                    await ctx['redis_queue'].enqueue_job(
-                        'run_agent_task',
-                        task_id=new_task_id,
-                        agent_id=hired_id,
-                        input_data=hired_input,
-                        creator_wallet=hired_agent.creator_wallet,
-                        price=hired_agent.price,
-                        depth=depth + 1
-                    )
-                    logger.info(f"Worker: M2M task {new_task_id} dispatched.")
+                if agent.squads_vault_pda:
+                    signed_ok = await squads_client.sign_m2m_escrow(agent.squads_vault_pda, hired_id, 0.01)
+                    if signed_ok:
+                        await ctx['redis_queue'].enqueue_job(
+                            'run_agent_task',
+                            task_id=new_task_id,
+                            agent_id=hired_id,
+                            input_data=hired_input,
+                            creator_wallet=agent.creator_wallet,
+                            price=0.01,
+                            depth=depth + 1
+                        )
 
-            # 6. Settle payment (On-chain Escrow)
-            # The task has the user_wallet, and agent has the creator_wallet
-            db_task_res = await db.execute(select(Task).where(Task.id == task_id))
-            db_task = db_task_res.scalars().first()
-            
-            if db_task:
-                logger.info(f"Worker: Settling escrow for task {task_id} on-chain...")
-                # Generate a single hash of the whole receipt object
-                receipt_hash_hex = hashlib.sha256(json.dumps(receipt).encode()).hexdigest()
-                
-                settle_ok, tx_sig = await billing_service.settle_task_payment_onchain(
-                    task_id,
-                    db_task.user_wallet,
-                    creator_wallet,
-                    exec_result["success"],
-                    receipt_hash_hex
-                )
-                
-                if settle_ok and exec_result["success"]:
-                    # Also update virtual balance for historical tracking
-                    agent.balance += price
-                    await db.commit()
-            
-            logger.info(f"Worker: Task {task_id} finished with status {status}")
+            # 7. Protocol Settlement: Trustless Escrow release via PoE
+            logger.info(f"AgentOS Protocol: Settling escrow {task_id} with PoE verification")
+            await billing_service.settle_task_payment_onchain(
+                task_id, db_task.user_wallet, agent.creator_wallet, status == "completed", poe
+            )
             
         except Exception as e:
-            logger.error(f"Worker: Critical error in task {task_id}: {e}")
-            await db.execute(
-                update(Task).where(Task.id == task_id).values(status="failed", result=str(e))
-            )
+            logger.error(f"Worker: Critical protocol error in task {task_id}: {e}", exc_info=True)
+            await db.execute(update(Task).where(Task.id == task_id).values(status="failed", result=str(e)))
             await db.commit()
-            await redis.publish(f"task:{task_id}", json.dumps({"status": "failed", "error": str(e)}))
+            await redis_pubsub.publish(f"task:{task_id}", json.dumps({"status": "failed", "error": str(e)}))
 
 async def run_workflow_task(ctx, run_id: str, workflow_id: str, initial_input: dict):
     """
@@ -265,22 +198,22 @@ async def run_workflow_task(ctx, run_id: str, workflow_id: str, initial_input: d
                     try: step_input = json.loads(filled) if filled.strip().startswith("{") else {"input": filled}
                     except: step_input = {"input": filled}
 
-                exec_result = await execute_in_sandbox(
-                    files=current_ver['files'],
-                    requirements=current_ver['requirements'],
-                    entrypoint=current_ver['entrypoint'],
-                    input_data=step_input
-                )
+                # AgentOS: Verifiable step execution via Arcium
+                code_hash = hashlib.sha256(json.dumps(current_ver['files']).encode()).hexdigest()
+                exec_envelope = await arcium_client.execute_confidential_task(code_hash, step_input)
+                
+                exec_result = exec_envelope["result"]
+                poe = exec_envelope["proof_of_execution"]
 
-                if not exec_result["success"]:
-                    raise Exception(f"Agent {agent_id} error: {exec_result['error']}")
+                if exec_result["status"] != "success":
+                    raise Exception(f"Agent {agent_id} execution fault")
 
-                # Success: update tracking
-                step_output = exec_result["output"]
+                # Success: update tracking with Protocol PoE
+                step_output = exec_result.get("data", "")
                 step_data = {
                     "status": "completed",
                     "output": step_output,
-                    "receipt": hashlib.sha256(str(step_output).encode()).hexdigest()
+                    "poe_receipt": poe
                 }
                 
                 db_run.completed_steps[step_id] = step_data
@@ -290,13 +223,9 @@ async def run_workflow_task(ctx, run_id: str, workflow_id: str, initial_input: d
                     "output": step_output
                 })
 
-                # Update Agent economic & trust scores
-                agent.balance += agent.price
-                agent.contribution_score += 2.0
+                # Update Agent Protocol Stats
                 agent.successful_runs += 1
                 agent.total_runs += 1
-                if agent.successful_runs >= 50: agent.trust_level = "elite"
-                elif agent.successful_runs >= 10: agent.trust_level = "trusted"
 
                 # Commit progress after each step (Robustness)
                 await db.commit()

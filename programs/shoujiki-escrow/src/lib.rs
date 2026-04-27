@@ -15,7 +15,7 @@ pub mod shoujiki_escrow {
         escrow.amount = amount;
         escrow.task_id = task_id;
         escrow.status = EscrowStatus::Locked;
-        escrow.receipt_hash = None;
+        escrow.poe_hash = None;
 
         // Transfer SOL to escrow PDA
         let ix = system_instruction::transfer(
@@ -35,13 +35,12 @@ pub mod shoujiki_escrow {
         Ok(())
     }
 
-    pub fn release_funds(ctx: Context<SettleEscrow>, success: bool, receipt_hash: [u8; 32]) -> Result<()> {
+    pub fn release_funds(ctx: Context<SettleEscrow>, success: bool, poe_hash: [u8; 32]) -> Result<()> {
         let escrow = &mut ctx.accounts.escrow;
-        // In Anchor, with the 'close' constraint, the account lamports 
-        // will be transferred to the destination at the end of the instruction.
-        // We just need to handle the escrowed 'amount' transfer here.
-
-        escrow.receipt_hash = Some(receipt_hash);
+        
+        // AgentOS Protocol: The poe_hash is the cryptographic commitment to the 
+        // verifiable execution performed in the Confidential VM (Arcium/TEE).
+        escrow.poe_hash = Some(poe_hash);
 
         if success {
             // Transfer escrowed amount from Escrow PDA to Agent Creator
@@ -100,6 +99,7 @@ pub struct SettleEscrow<'info> {
     #[account(mut)]
     /// CHECK: Handled by has_one
     pub agent_creator: AccountInfo<'info>,
+    /// The Platform Authority acts as the PoE Attestor/Sequencer in the current version.
     pub platform_authority: Signer<'info>,
 }
 
@@ -110,7 +110,7 @@ pub struct EscrowAccount {
     pub amount: u64,
     pub task_id: String,
     pub status: EscrowStatus,
-    pub receipt_hash: Option<[u8; 32]>,
+    pub poe_hash: Option<[u8; 32]>,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]

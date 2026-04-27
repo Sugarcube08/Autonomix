@@ -32,14 +32,16 @@ class AgentResponse(AgentBase):
     current_version: str
     creator_wallet: str
     mint_address: Optional[str] = None
-    reputation_score: float
-    reliability_score: float
-    contribution_score: float
-    trust_level: str
+    
+    # Protocol Stats
     total_runs: int
     successful_runs: int
-    balance: float
-    treasury_address: Optional[str] = None
+    
+    # AgentOS Protocol Fields
+    world_id_hash: Optional[str] = None
+    squads_vault_pda: Optional[str] = None
+    credential_registry_address: Optional[str] = None
+    
     created_at: datetime
 
     class Config:

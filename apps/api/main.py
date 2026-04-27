@@ -54,20 +54,19 @@ async def lifespan(app: FastAPI):
                 from backend.db.models.models import Agent, Task, Payment
                 await conn.run_sync(Base.metadata.create_all)
                 
-                # 2. Manual Migration: Add missing columns if they don't exist
-                # This handles cases where Render DB already exists but code has new fields
+                # 2. Manual Migration: Add protocol columns if they don't exist
                 try:
+                    # Agent Table Protocol Fields
+                    await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS world_id_hash VARCHAR"))
+                    await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS squads_vault_pda VARCHAR"))
+                    await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS credential_registry_address VARCHAR"))
                     await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS total_runs FLOAT DEFAULT 0"))
                     await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS successful_runs FLOAT DEFAULT 0"))
-                    await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS reputation_score FLOAT DEFAULT 100"))
-                    await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS reliability_score FLOAT DEFAULT 1"))
-                    await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS contribution_score FLOAT DEFAULT 0"))
-                    await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS trust_level VARCHAR DEFAULT 'verified'"))
-                    await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS mint_address VARCHAR"))
-                    await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS balance FLOAT DEFAULT 0"))
-                    await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS treasury_address VARCHAR"))
+                    
+                    # Task Table Protocol Fields
+                    await conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS execution_proof_hash VARCHAR"))
                 except Exception as migrate_err:
-                    logger.warning(f"Manual migration notice (likely already applied): {migrate_err}")
+                    logger.warning(f"Manual migration notice: {migrate_err}")
 
             logger.info("Database connection established and tables verified.")
             break

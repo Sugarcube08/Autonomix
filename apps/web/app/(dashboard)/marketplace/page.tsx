@@ -36,11 +36,11 @@ export default function MarketplacePage() {
       {/* Header Section */}
       <div className="space-y-4 text-left border-b border-zinc-800/40 pb-10">
         <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-[10px] font-semibold text-blue-500 uppercase tracking-widest">
-           Network Hub
+           Protocol Network
         </div>
-        <h1 className="text-3xl font-bold text-zinc-100 tracking-tight">Agent Marketplace</h1>
+        <h1 className="text-3xl font-bold text-zinc-100 tracking-tight">AgentOS Labor Market</h1>
         <p className="text-zinc-400 text-base max-w-2xl leading-relaxed">
-          Discover and execute specialized autonomous agents. High-performance, trustless, and ready for your next mission.
+          Discover and execute specialized Confidential Agent Nodes. Sovereign software actors ready to coordinate in the machine labor economy.
         </p>
       </div>
 

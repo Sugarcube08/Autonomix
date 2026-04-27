@@ -98,17 +98,25 @@ export default function DeploySpacePage() {
                <CheckCircle2 size={32} className="text-green-500" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-2xl font-bold text-white">Agent Successfully Deployed</h2>
-              <p className="text-zinc-500 text-sm">Your autonomous node is now active on the global registry.</p>
+              <h2 className="text-2xl font-bold text-white">Sovereign Node Deployed</h2>
+              <p className="text-zinc-500 text-sm">Your autonomous protocol node is now active with World ID and Squads Treasury.</p>
             </div>
             
             <div className="w-full max-w-lg p-5 bg-zinc-950 border border-zinc-800 rounded-xl space-y-4">
                <div className="space-y-1 text-left">
-                 <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest block mb-2">Mint Address</span>
+                 <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest block mb-2">Passport_Asset (Metaplex)</span>
                  <p className="text-xs font-mono text-zinc-400 break-all bg-zinc-900 p-3 rounded-lg border border-zinc-800">
                    {deployedAgent?.mint_address || 'Confirmed on Devnet'}
                  </p>
                </div>
+               {deployedAgent?.squads_vault_pda && (
+                 <div className="space-y-1 text-left">
+                   <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest block mb-2">Sovereign_Vault (Squads)</span>
+                   <p className="text-xs font-mono text-zinc-400 break-all bg-zinc-900 p-3 rounded-lg border border-zinc-800">
+                     {deployedAgent.squads_vault_pda}
+                   </p>
+                 </div>
+               )}
             </div>
 
             <div className="flex gap-4 w-full max-w-lg">
@@ -173,9 +181,9 @@ export default function DeploySpacePage() {
               <CardContent className="p-8 space-y-10">
                 <div className="space-y-8">
                   {[
-                    { label: "Neural Integrity", desc: "Verifying multi-file logic and AST safety.", active: status === 'validating', done: status === 'minting' },
-                    { label: "On-chain Identity", desc: "Generating unique Metaplex Core asset.", active: status === 'minting', done: false },
-                    { label: "Network Registry", desc: "Broadcasting to global agent index.", active: false, done: false }
+                    { label: "Protocol Integrity", desc: "Verifying multi-file logic and AgentOS runtime safety.", active: status === 'validating', done: status === 'minting' },
+                    { label: "Identity & Treasury", desc: "World ID provenance and Squads V4 vault provisioning.", active: status === 'minting', done: false },
+                    { label: "Metaplex Passport", desc: "Minting on-chain identity asset (Passport).", active: false, done: false }
                   ].map((step, i) => (
                     <div key={i} className="flex gap-6">
                        <div className={cn(
