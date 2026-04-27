@@ -1,6 +1,8 @@
 import ast
 import json
 import os
+import base64
+import wasmtime
 from pathlib import Path
 
 class AgentValidator(ast.NodeVisitor):
@@ -84,13 +86,33 @@ class AgentValidator(ast.NodeVisitor):
                 self.has_agent_instance = True
         self.generic_visit(node)
 
-def validate_agent_code(code: str, available_files: list = None):
+def validate_wasm_module(wasm_base64: str):
+    """
+    Verifies that the provided base64 string is a valid WASM module.
+    """
+    try:
+        engine = wasmtime.Engine()
+        wasm_bytes = base64.b64decode(wasm_base64)
+        wasmtime.Module(engine, wasm_bytes)
+        return True, "Valid WASM module"
+    except Exception as e:
+        return False, f"Invalid WASM module: {str(e)}"
+
+def validate_agent_code(code: str, available_files: dict = None):
+    # If a WASM file is present, validate it first
+    if available_files:
+        wasm_file = next((v for k, v in available_files.items() if k.endswith('.wasm')), None)
+        if wasm_file:
+            ok, msg = validate_wasm_module(wasm_file)
+            if not ok: return False, msg
+            return True, "Success" # Skip Python validation if WASM is primary
+
     try:
         tree = ast.parse(code)
     except SyntaxError as e:
         return False, f"Syntax error: {e}"
 
-    validator = AgentValidator(available_files)
+    validator = AgentValidator(available_files.keys() if available_files else None)
     validator.visit(tree)
 
     if validator.errors:

@@ -68,7 +68,7 @@ export const AgentCard = ({ agent, onDelete, isDeleting, onWithdraw, isWithdrawi
       
       <CardContent className="flex-1 space-y-4 text-left">
         <p className="text-zinc-400 text-xs leading-relaxed line-clamp-3">
-          {agent.description || "Autonomous agent protocol node executing via AgentOS verifiable compute."}
+          {agent.description || "Autonomous agent protocol node executing via VACN verifiable compute."}
         </p>
         
         <div className="pt-2 flex flex-col gap-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-600">

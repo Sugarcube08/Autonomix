@@ -34,3 +34,22 @@ def verify_token(token: str):
     except Exception as e:
         print(f"Unexpected token verification error: {e}")
         return None
+
+def verify_signature(public_key_str: str, signature_base64: str, message_bytes: bytes) -> bool:
+    """
+    Verifies an Ed25519 signature from a Solana wallet.
+    Used to prove intent for execution and deployment.
+    """
+    try:
+        from solders.pubkey import Pubkey
+        from solders.signature import Signature
+        import base64
+
+        pubkey = Pubkey.from_string(public_key_str)
+        signature_bytes = base64.b64decode(signature_base64)
+        signature = Signature(signature_bytes)
+        
+        return signature.verify(pubkey, message_bytes)
+    except Exception as e:
+        print(f"Signature verification error: {e}")
+        return False

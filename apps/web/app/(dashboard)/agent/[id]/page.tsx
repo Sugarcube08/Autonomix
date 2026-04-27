@@ -99,7 +99,11 @@ export default function AgentRunPage() {
             setError(data.error || 'Execution fault');
             addLog("Execution aborted.");
           } else {
-            addLog("Result finalized. Proof of Execution (PoE) anchored.");
+            addLog("Result finalized.");
+            if (data.poae_hash) {
+              addLog(`Proof of Autonomous Execution (PoAE): ${data.poae_hash.slice(0, 16)}...`);
+              addLog("Status: Cryptographically Anchored on Solana.");
+            }
           }
           ws.close();
         }

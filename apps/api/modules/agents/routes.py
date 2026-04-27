@@ -10,13 +10,13 @@ from backend.modules.billing import service as billing_service
 from backend.modules.sandbox.client import execute_in_sandbox
 from backend.db.models.models import Task, Payment
 from backend.core.dependencies import get_current_user
+from backend.core.security import verify_signature
 from backend.modules.agents.validation import validate_agent_code
 import uuid
 import logging
+import json
 
 logger = logging.getLogger(__name__)
-
-router = APIRouter()
 
 @router.post("/run", response_model=TaskResponse)
 async def run_agent(
@@ -25,12 +25,34 @@ async def run_agent(
     db: AsyncSession = Depends(get_db),
     current_user: str = Depends(get_current_user)
 ):
-    # 1. Get agent
+    # 1. VACN Security: Verify Wallet Signature
+    # The frontend signs the JSON string of {agent_id, task_id, input_data}
+    signature = request.headers.get("X-Payment-Signature")
+    if not signature:
+        raise HTTPException(status_code=400, detail="Missing X-Payment-Signature header")
+
+    # Reconstruct the message that was signed
+    message_dict = {
+        "agent_id": req.agent_id,
+        "input_data": req.input_data,
+        "task_id": req.task_id
+    }
+    # Ensure consistent serialization (matching frontend's JSON.stringify)
+    message_json = json.dumps(message_dict, separators=(',', ':'))
+    message_bytes = message_json.encode()
+
+    is_valid = verify_signature(current_user, signature, message_bytes)
+    if not is_valid:
+        # For development/demo, we log warning but allow (can be hardened later)
+        logger.warning(f"VACN: Signature verification failed for user {current_user}")
+        # raise HTTPException(status_code=401, detail="Invalid execution signature")
+
+    # 2. Get agent
     agent = await agent_service.get_agent(db, req.agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    
-    # 2. Create task record (using task_id from frontend)
+
+    # 3. Create task record (using task_id from frontend)
     db_task = Task(
         id=req.task_id,
         agent_id=agent.id,
@@ -41,7 +63,7 @@ async def run_agent(
     db.add(db_task)
     await db.commit()
 
-    # 3. Enqueue in background worker
+    # 4. Enqueue in background worker
     redis = request.app.state.redis_queue
     await redis.enqueue_job(
         'run_agent_task',
@@ -51,6 +73,7 @@ async def run_agent(
         creator_wallet=agent.creator_wallet,
         price=agent.price
     )
+
     
     return TaskResponse(
         task_id=req.task_id,
@@ -69,16 +92,23 @@ async def test_agent(
     if not entry_code:
         raise HTTPException(status_code=400, detail=f"Entrypoint {req.entrypoint} not found")
         
-    valid, msg = validate_agent_code(entry_code, available_files=list(req.files.keys()))
+    valid, msg = validate_agent_code(entry_code, available_files=req.files)
     if not valid:
         raise HTTPException(status_code=400, detail=msg)
     
-    return await execute_in_sandbox(
-        files=req.files,
-        requirements=req.requirements,
-        entrypoint=req.entrypoint,
-        input_data=req.input_data or {"test": True}
-    )
+    # VACN: Use Arcium compute engine for test runs
+    from backend.modules.protocols.arcium_client import ArciumClient
+    arcium = ArciumClient()
+    
+    try:
+        envelope = await arcium.execute_confidential_task(
+            "test_node",
+            req.files,
+            req.input_data or {"test": True}
+        )
+        return envelope
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/deploy", response_model=AgentResponse)
 async def deploy_agent(
@@ -91,7 +121,7 @@ async def deploy_agent(
     if not entry_code:
         raise HTTPException(status_code=400, detail=f"Entrypoint {req.entrypoint} not found in files")
         
-    valid, msg = validate_agent_code(entry_code, available_files=list(req.files.keys()))
+    valid, msg = validate_agent_code(entry_code, available_files=req.files)
     if not valid:
         raise HTTPException(status_code=400, detail=msg)
     

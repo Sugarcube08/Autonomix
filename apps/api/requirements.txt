@@ -17,3 +17,4 @@ python-dotenv==1.0.1
 arq==0.26.1
 redis==5.2.1
 websockets==15.0
+wasmtime==29.0.1

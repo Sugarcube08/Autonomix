@@ -40,7 +40,7 @@ class Task(Base):
     escrow_pda = Column(String, nullable=True)
     settlement_signature = Column(String, nullable=True)
     execution_receipt = Column(JSON, nullable=True) 
-    execution_proof_hash = Column(String, nullable=True) # Arcium / TEE Cryptographic Proof of Execution
+    poae_hash = Column(String, nullable=True) # Proof of Autonomous Execution (VACN)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

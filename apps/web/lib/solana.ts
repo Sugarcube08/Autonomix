@@ -47,6 +47,7 @@ export const createEscrowTransaction = async (
       { pubkey: escrowPda, isSigner: false, isWritable: true },
       { pubkey: fromPubkey, isSigner: true, isWritable: true },
       { pubkey: agentCreatorPubkey, isSigner: false, isWritable: false },
+      { pubkey: new PublicKey(PLATFORM_WALLET), isSigner: false, isWritable: false },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     ],
     data,

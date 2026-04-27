@@ -181,7 +181,7 @@ export default function DeploySpacePage() {
               <CardContent className="p-8 space-y-10">
                 <div className="space-y-8">
                   {[
-                    { label: "Protocol Integrity", desc: "Verifying multi-file logic and AgentOS runtime safety.", active: status === 'validating', done: status === 'minting' },
+                    { label: "Protocol Integrity", desc: "Verifying multi-file logic and VACN runtime safety.", active: status === 'validating', done: status === 'minting' },
                     { label: "Identity & Treasury", desc: "World ID provenance and Squads V4 vault provisioning.", active: status === 'minting', done: false },
                     { label: "Metaplex Passport", desc: "Minting on-chain identity asset (Passport).", active: false, done: false }
                   ].map((step, i) => (

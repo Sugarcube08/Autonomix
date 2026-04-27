@@ -1,65 +1,98 @@
-# AgentOS (formerly Shoujiki)
+# VACN
 
-> **A Decentralized Operating System for Autonomous Economic Agents**
+## Verifiable Autonomous Compute Network
 
-The internet gave software reach. Blockchains gave software ownership. AI is giving software agency. **AgentOS** is the missing economic layer—a protocol stack that turns AI agents into sovereign economic actors.
-
-Instead of a centralized marketplace, AgentOS is built as the TCP/IP for machine economies. It coordinates identity, capital, execution, and trust through best-of-breed Web3 protocols.
+### A Protocol Thesis for Autonomous Computation, Proof, and Machine Economies
 
 ---
 
-## The Protocol Stack
+# Abstract
 
-AgentOS does not reinvent the wheel. It acts as an orchestrator, composing the strongest primitives in the Solana and Web3 ecosystem:
+Blockchains established decentralized consensus over transactions.
+Cloud networks scaled computation.
+Artificial intelligence introduced autonomous software actors.
 
-### 1. Identity & Trust Layer
-*   **Metaplex:** Agents are minted as Core Assets, providing a standard, lightweight on-chain identity.
-*   **World ID:** (Integration in progress) Proof-of-human for agent creators, preventing Sybil attacks.
-*   **W3C Attestations:** Portable verifiable credentials for agent execution history and skill validation.
+A missing primitive remains:
 
-### 2. Account & Treasury Layer
-*   **Squads V4:** Every agent receives a smart treasury (multisig PDA) upon creation to hold budgets, receive payments, and govern spending autonomously.
-*   **Privy:** Abstracted, embedded wallet infrastructure for seamless human-to-machine interactions.
+How do autonomous computations become trust-minimized, verifiable, economically coordinated, and globally routable?
 
-### 3. Secure Compute & Execution Layer
-*   **Arcium / TEEs:** (Transitioning from OS-level sandboxes). Execution is moving to Confidential VMs / WebAssembly runtimes to guarantee privacy and generate cryptographic **Proofs of Execution (PoE)**.
+This paper introduces **VACN (Verifiable Autonomous Compute Network)**:
 
-### 4. Coordination & Swarms
-*   **AgentOS Sequencer:** The core routing and orchestration logic (FastAPI + arq) that coordinates DAGs (Directed Acyclic Graphs) of agent labor.
-*   **Pentagon:** (Future) Decentralized swarm composition and coordination logic.
+A decentralized protocol for:
 
-### 5. Payments & Capital Mobility
-*   **LI.FI:** (Future) Cross-chain liquidity routing, allowing agents to hold assets on Solana while paying for API resources on other chains.
-*   **AgentOS Escrow:** Trustless protocol settling funds only when valid Proofs of Execution are verified.
+* executing autonomous agent workloads
+* generating proofs of autonomous execution
+* verifying computation outcomes
+* coordinating machine labor markets
+* settling economic activity around proven work
 
----
+VACN treats autonomous computation itself as a network primitive.
 
-## Core Primitives
+Not agents as apps.
+Not compute as infrastructure.
 
-Stop thinking of agents as apps. Think of them as sovereign economic participants. In AgentOS, every agent gets:
-*   **Identity:** Provenance and portable reputation.
-*   **Treasury:** The ability to own and deploy capital.
-*   **Execution Rights:** Verifiable compute environments.
-*   **Coordination Rights:** The ability to autonomously hire other agents in the Machine Labor Market.
-
-## Getting Started (AgentOS Sequencer)
-
-Currently, the AgentOS Sequencer orchestrates deployments and routes tasks.
-
-### Prerequisites
-* Docker & Docker Compose
-* Solana CLI (for Keypair generation)
-* A valid Devnet Solana RPC URL
-
-### Local Development
-```bash
-cp apps/api/.env.example apps/api/.env
-cp apps/web/.env.example apps/web/.env
-# Update .env files with your configuration
-
-docker-compose up --build
-```
+But computation as a provable economic object.
 
 ---
 
-*AgentOS is the economic coordination layer where autonomous agents gain identity, execute through secure compute networks, coordinate in labor markets, and participate in programmable machine capital markets.*
+# Core Primitive: Proof of Autonomous Execution (PoAE)
+
+PoAE is VACN’s foundational primitive.
+
+Each autonomous computation produces:
+
+* Input Commitment
+* Execution Trace Commitment
+* Output Commitment
+* Proof Artifact
+* Settlement Attestation
+
+Conceptually:
+
+Transaction: "state transition happened"
+**PoAE: "autonomous computation occurred honestly"**
+
+This extends proof concepts beyond transactions.
+
+---
+
+# Protocol Architecture
+
+## Layer 0 — Settlement Base (Solana)
+Economic settlement, receipt anchoring, staking logic, slashing conditions, and dispute settlement.
+
+## Layer 1 — Verifiable Compute Layer (The Core)
+Executor Nodes perform workloads using deterministic WASM, TEEs, or confidential compute (e.g., Arcium). They produce execution artifacts and emit proofs.
+
+## Layer 2 — Proof Verification Layer
+Verifier nodes validate PoAE claims. Models include Optimistic Verification, Verified Execution, and future ZK Verification. Verification becomes a protocol service.
+
+## Layer 3 — Autonomous Compute Market
+Users submit jobs. Executors compete to process them. This establishes compute routing, fee markets, and execution auctions.
+
+## Layer 4 — Coordination Layer
+Supports multi-agent DAGs, delegation, swarm execution, and autonomous task routing. Provable coordination, not just orchestration.
+
+## Layer 5 — Machine Economy Layer
+Economic activity forms above proven computation. Includes machine labor markets, agent hiring, machine payroll, and service liquidity.
+
+## Layer 6 — Machine Capital Markets
+Productive agent assets, machine credit, agent lending, and autonomous capital routing.
+
+---
+
+# Protocol Composition Strategy
+
+VACN should not rebuild everything. It composes external protocols:
+
+*   **Identity:** Metaplex, World ID
+*   **Treasury:** Squads
+*   **Liquidity:** LI.FI
+*   **Confidential Compute:** Arcium
+*   **Verification / Oracles:** Switchboard
+
+**VACN owns the compute verification layer, coordination markets, and machine economy primitives.**
+
+---
+
+*“A decentralized network where autonomous computations are executed, proven, verified, and economically coordinated through programmable machine markets.”*

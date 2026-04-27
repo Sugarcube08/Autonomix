@@ -43,7 +43,7 @@ async def create_agent(db: AsyncSession, agent_data: AgentCreate, creator_wallet
         db_agent.description = agent_data.description
         db_agent.price = agent_data.price
     else:
-        # AgentOS Protocol: Identity & Treasury Provisioning
+        # VACN Protocol: Identity & Treasury Provisioning
         
         # 1. World ID: Verify creator provenance (Proof of Human)
         # In a real flow, the ZKP would be passed from the frontend
@@ -74,7 +74,7 @@ async def create_agent(db: AsyncSession, agent_data: AgentCreate, creator_wallet
             
             # Construct Metaplex Core 'Create' Instruction
             name_bytes = agent_data.name.encode()
-            # URI points to the AgentOS metadata registry
+            # URI points to the VACN metadata registry
             uri = f"https://api.shoujiki.ai/agents/{agent_data.id}/metadata"
             uri_bytes = uri.encode()
             
@@ -122,11 +122,6 @@ async def create_agent(db: AsyncSession, agent_data: AgentCreate, creator_wallet
             world_id_hash=world_id_hash
         )
         db.add(db_agent)
-    
-    await db.commit()
-    await db.refresh(db_agent)
-    return db_agent
-
     
     await db.commit()
     await db.refresh(db_agent)

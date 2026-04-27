@@ -1,43 +1,29 @@
-# AgentOS Protocol Transition Checklist
+# VACN (Verifiable Autonomous Compute Network) Roadmap
 
-This document tracks the migration from the V1 Shoujiki marketplace to the V2 AgentOS protocol stack.
+## Phase 1: Verifiable Compute Foundation
+- [x] Refactor architecture from "AgentOS" to "VACN"
+- [x] Define `Proof of Autonomous Execution (PoAE)` primitive.
+- [x] Implement deterministic PoAE commitment logic in `ArciumClient`.
+- [x] Implement WASM module validation in the deployment pipeline.
+- [x] Implement actual WASM execution of agent logic via WASI.
 
-## PHASE 1: TEAR DOWN CENTRALIZATION
-- [x] Refactor Database Models: Strip internal `reputation`, `trust_level`, and `balance` floats from PostgreSQL.
-- [x] Update Database Models: Add protocol integration fields (`squads_vault_pda`, `world_id_hash`, `credential_registry_address`).
-- [ ] Deprecate `PLATFORM_SECRET_SEED` settlement: The centralized backend must stop signing `release_funds`.
-- [ ] Remove Simulated M2M: Agents hiring agents must be funded by the hiring agent's Squads Treasury, not the platform.
+## Phase 2: PoAE Receipts & Settlement
+- [x] Update Anchor smart contract to settle exclusively via `poae_hash`.
+- [x] Patch critical security vulnerability: Enforce `platform_authority` validation.
+- [x] Implement real-time PoAE reporting to the execution interface.
+- [x] Add `EscrowSettled` event emission for protocol observability.
+- [x] Integrate Switchboard for decentralized PoAE verification on-chain.
+- [ ] Bind executor staking conditions to PoAE validity.
 
-## PHASE 2: COMPOSE THE STACK (The 7 Protocols)
+## Phase 3: Verifier Network
+- [x] Establish architectural support for decentralized Verifier Nodes.
+- [x] Implement optimistic fraud proofs and challenge windows in the smart contract.
+- [x] Build autonomous protocol finalizer for matured challenge periods.
 
-### 1. Metaplex (Identity)
-- [x] Initial Metaplex Core integration.
-- [ ] Upgrade Metadata: Point asset URI to a verifiable credential graph instead of static JSON.
+## Phase 4: Compute Marketplace
+- [ ] Decentralize the `arq` orchestrator into a peer-to-peer compute routing layer.
+- [ ] Implement fee markets for Executor nodes.
 
-### 2. Squads V4 (Treasury)
-- [x] Implement protocol stubs.
-- [ ] Agent Minting Flow: Automatically deploy a Squads V4 Multisig PDA for every new agent.
-- [ ] Update Escrow: Task payments must flow directly into the agent's Squads PDA.
-
-### 3. Arcium / Confidential Compute (Execution)
-- [x] Implement protocol stubs.
-- [ ] Deprecate `bwrap`/`unshare` Python sandbox.
-- [ ] Implement Wasmtime / TEE execution runner.
-- [ ] Define "Proof of Execution" (PoE) schema (Input Hash + State Hash + Output Hash + TEE Signature).
-
-### 4. World ID (Trust)
-- [x] Implement protocol stubs.
-- [ ] Add World ID verification to the agent deployment flow (Proof of Human creator).
-
-### 5. Privy (Accounts)
-- [ ] Replace custom JWT auth with Privy embedded wallets for developers managing agents.
-
-### 6. LI.FI (Liquidity)
-- [ ] Integrate LI.FI routing for cross-chain agent resource payments.
-
-### 7. Pentagon (Coordination)
-- [ ] Research integration for decentralized swarm orchestration to replace the centralized `arq` DAG runner.
-
-## PHASE 3: THE LABOR MARKET
-- [ ] Build AgentOS Escrow V2: Settlement requires a valid cryptographic Proof of Execution (PoE) signature, not a backend signature.
-- [ ] Machine-to-Machine (M2M) Auth: Implement delegated signing so a Squads treasury can approve an escrow for a sub-agent.
+## Phase 5: Machine Economy atop Compute
+- [ ] Re-enable Squads-based M2M hiring using proven compute states.
+- [ ] Launch the Machine Labor Market interface.

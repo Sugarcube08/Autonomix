@@ -100,10 +100,10 @@ async def verify_solana_payment(tx_signature: str, expected_amount_sol: float, s
             logger.error(f"Payment verification error: {str(e)}", exc_info=True)
             return False, f"Verification error: {str(e)}"
 
-async def settle_task_payment_onchain(task_id: str, user_wallet: str, creator_wallet: str, success: bool, poe_signature: str):
+async def settle_task_payment_onchain(task_id: str, user_wallet: str, creator_wallet: str, success: bool, poae_signature: str):
     """
-    Settles the on-chain escrow by releasing funds to the creator or refunding the user.
-    The on-chain program verifies the Proof of Execution (PoE) signature.
+    Submits a Proof of Autonomous Execution (PoAE) to the on-chain escrow.
+    Initiates an optimistic challenge period before final funds release.
     """
     async with AsyncClient(SOLANA_RPC_URL) as client:
         try:
@@ -113,21 +113,18 @@ async def settle_task_payment_onchain(task_id: str, user_wallet: str, creator_wa
                 ESCROW_PROGRAM_ID
             )
 
-            # 2. Construct release_funds instruction
-            disc = get_anchor_discriminator("release_funds")
+            # 2. Construct submit_poae instruction
+            disc = get_anchor_discriminator("submit_poae")
             
-            # Data: discriminator (8) + success (1) + poe_hash (32)
-            # In a real implementation, we would pack the actual PoE signature or its hash
-            poe_hash = hashlib.sha256(poe_signature.encode()).digest()
-            data = disc + struct.pack("?", success) + poe_hash
+            # Data: discriminator (8) + success (1) + poae_hash (32)
+            poae_hash = hashlib.sha256(poae_signature.encode()).digest()
+            data = disc + struct.pack("?", success) + poae_hash
 
             ix = Instruction(
                 program_id=ESCROW_PROGRAM_ID,
                 data=data,
                 accounts=[
                     AccountMeta(pubkey=escrow_pda, is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=Pubkey.from_string(user_wallet), is_signer=False, is_writable=True),
-                    AccountMeta(pubkey=Pubkey.from_string(creator_wallet), is_signer=False, is_writable=True),
                     AccountMeta(pubkey=platform_keypair.pubkey(), is_signer=True, is_writable=False),
                 ]
             )
@@ -144,10 +141,50 @@ async def settle_task_payment_onchain(task_id: str, user_wallet: str, creator_wa
             
             # 4. Send transaction
             resp = await client.send_transaction(tx)
-            logger.info(f"Escrow settlement successful: {resp.value}")
+            logger.info(f"PoAE submitted on-chain: {resp.value}")
             return True, str(resp.value)
         except Exception as e:
-            logger.error(f"On-chain escrow settlement error: {e}")
+            logger.error(f"VACN: PoAE submission error: {e}")
+            return False, str(e)
+
+async def finalize_task_settlement(task_id: str, user_wallet: str, creator_wallet: str):
+    """
+    Finalizes the escrow settlement after the challenge period has expired.
+    Can be called by anyone (permissionless finalize) as per protocol design.
+    """
+    async with AsyncClient(SOLANA_RPC_URL) as client:
+        try:
+            escrow_pda, _ = Pubkey.find_program_address(
+                [b"escrow", task_id.encode()],
+                ESCROW_PROGRAM_ID
+            )
+
+            disc = get_anchor_discriminator("finalize_settlement")
+            
+            ix = Instruction(
+                program_id=ESCROW_PROGRAM_ID,
+                data=disc,
+                accounts=[
+                    AccountMeta(pubkey=escrow_pda, is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=Pubkey.from_string(user_wallet), is_signer=False, is_writable=True),
+                    AccountMeta(pubkey=Pubkey.from_string(creator_wallet), is_signer=False, is_writable=True),
+                ]
+            )
+
+            latest_blockhash = (await client.get_latest_blockhash()).value.blockhash
+            msg = MessageV0.try_compile(
+                payer=platform_keypair.pubkey(),
+                instructions=[ix],
+                address_lookup_table_accounts=[],
+                recent_blockhash=latest_blockhash
+            )
+            tx = VersionedTransaction(msg, [platform_keypair])
+            
+            resp = await client.send_transaction(tx)
+            logger.info(f"Escrow finalized on-chain: {resp.value}")
+            return True, str(resp.value)
+        except Exception as e:
+            logger.error(f"VACN: Finalization error for {task_id}: {e}")
             return False, str(e)
 
 async def transfer_sol(recipient_wallet: str, amount_sol: float):

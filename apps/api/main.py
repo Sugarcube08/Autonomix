@@ -64,7 +64,7 @@ async def lifespan(app: FastAPI):
                     await conn.execute(text("ALTER TABLE agents ADD COLUMN IF NOT EXISTS successful_runs FLOAT DEFAULT 0"))
                     
                     # Task Table Protocol Fields
-                    await conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS execution_proof_hash VARCHAR"))
+                    await conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS poae_hash VARCHAR"))
                 except Exception as migrate_err:
                     logger.warning(f"Manual migration notice: {migrate_err}")
 

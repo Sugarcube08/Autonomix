@@ -8,6 +8,7 @@ from arq import create_pool
 from arq.connections import RedisSettings
 from backend.modules.protocols.arcium_client import ArciumClient
 from backend.modules.protocols.squads_client import SquadsClient
+from backend.modules.protocols.switchboard_client import SwitchboardClient
 from backend.modules.billing import service as billing_service
 from backend.db.models.models import Task, Workflow, WorkflowRun, Agent
 from sqlalchemy import update, select
@@ -23,11 +24,12 @@ logger = logging.getLogger(__name__)
 
 arcium_client = ArciumClient()
 squads_client = SquadsClient()
+switchboard_client = SwitchboardClient()
 
 async def run_agent_task(ctx, task_id: str, agent_id: str, input_data: dict, creator_wallet: str, price: float, depth: int = 0):
     """
-    AgentOS Protocol Worker: Executes agent in a Confidential VM (Arcium) 
-    and generates a cryptographic Proof of Execution (PoE).
+    VACN Protocol Worker: Executes agent in a Confidential VM (Arcium) 
+    and generates a cryptographic Proof of Autonomous Execution (PoAE).
     """
     if depth > 3:
         logger.error(f"Worker: Task {task_id} exceeded recursion depth {depth}. Aborting.")
@@ -57,16 +59,19 @@ async def run_agent_task(ctx, task_id: str, agent_id: str, input_data: dict, cre
         await db.commit()
         await redis_pubsub.publish(f"task:{task_id}", json.dumps({"status": "running"}))
 
-        # 3. AgentOS Execution: Verifiable Compute (Arcium)
+        # 3. VACN Execution: Verifiable Compute (Arcium)
         try:
             current_ver = next((v for v in agent.versions if v['version'] == agent.current_version), agent.versions[-1])
-            code_hash = hashlib.sha256(json.dumps(current_ver['files']).encode()).hexdigest()
             
-            # Execute in Arcium (Confidential VM)
-            exec_envelope = await arcium_client.execute_confidential_task(code_hash, input_data)
+            # Execute in Arcium (Confidential VM / WASM)
+            exec_envelope = await arcium_client.execute_confidential_task(
+                agent.id, 
+                current_ver['files'], 
+                input_data
+            )
             
             exec_result = exec_envelope["result"]
-            poe = exec_envelope["proof_of_execution"] # The cryptographic PoE
+            poae = exec_envelope["proof_of_autonomous_execution"] # The cryptographic PoAE
             
             status = "completed" if exec_result["status"] == "success" else "failed"
             result_data = exec_result.get("data", "")
@@ -76,17 +81,17 @@ async def run_agent_task(ctx, task_id: str, agent_id: str, input_data: dict, cre
                 "task_id": task_id,
                 "agent_id": agent_id,
                 "input_hash": hashlib.sha256(json.dumps(input_data).encode()).hexdigest(),
-                "poe_signature": poe,
+                "poae_signature": poae,
                 "timestamp": str(asyncio.get_event_loop().time())
             }
 
-            # 5. Update Task with PoE
+            # 5. Update Task with PoAE
             await db.execute(
                 update(Task).where(Task.id == task_id).values(
                     status=status, 
                     result=json.dumps(result_data),
                     execution_receipt=receipt,
-                    execution_proof_hash=poe
+                    poae_hash=poae
                 )
             )
             
@@ -96,7 +101,11 @@ async def run_agent_task(ctx, task_id: str, agent_id: str, input_data: dict, cre
                 agent.successful_runs += 1
             
             await db.commit()
-            await redis_pubsub.publish(f"task:{task_id}", json.dumps({"status": status, "result": result_data}))
+            await redis_pubsub.publish(f"task:{task_id}", json.dumps({
+                "status": status, 
+                "result": result_data,
+                "poae_hash": poae
+            }))
             
             # 6. AgentOS Machine Economy: True M2M Hiring via Squads
             hire_requests = exec_result.get("hire_requests", [])
@@ -118,17 +127,56 @@ async def run_agent_task(ctx, task_id: str, agent_id: str, input_data: dict, cre
                             depth=depth + 1
                         )
 
-            # 7. Protocol Settlement: Trustless Escrow release via PoE
-            logger.info(f"AgentOS Protocol: Settling escrow {task_id} with PoE verification")
-            await billing_service.settle_task_payment_onchain(
-                task_id, db_task.user_wallet, agent.creator_wallet, status == "completed", poe
+            # 7. Protocol Verification: Request Switchboard Oracle to verify PoAE
+            logger.info(f"VACN Protocol: Submitting PoAE to Switchboard for task {task_id}")
+            sb_tx = await switchboard_client.create_verification_request(task_id, poae)
+            
+            # 8. Protocol Settlement: Propose outcome on-chain (Submit PoAE)
+            logger.info(f"VACN Protocol: Proposing settlement for escrow {task_id} via PoAE submission")
+            settle_ok, tx_sig = await billing_service.settle_task_payment_onchain(
+                task_id, db_task.user_wallet, agent.creator_wallet, status == "completed", poae
             )
             
+            if settle_ok:
+                # Update status to verifying
+                db_task.status = "verifying"
+                db_task.settlement_signature = tx_sig
+                await db.commit()
+                await redis_pubsub.publish(f"task:{task_id}", json.dumps({"status": "verifying", "challenge_sig": tx_sig}))
+
         except Exception as e:
             logger.error(f"Worker: Critical protocol error in task {task_id}: {e}", exc_info=True)
             await db.execute(update(Task).where(Task.id == task_id).values(status="failed", result=str(e)))
             await db.commit()
             await redis_pubsub.publish(f"task:{task_id}", json.dumps({"status": "failed", "error": str(e)}))
+
+async def finalize_vacn_settlements(ctx):
+    """
+    Cron-like task to finalize optimistic settlements.
+    In Phase 3, this moves tasks from 'verifying' to 'settled'.
+    """
+    logger.info("VACN_FINALIZER: Scanning for matured challenge periods...")
+    async with AsyncSessionLocal() as db:
+        # Find tasks in 'verifying' status
+        res = await db.execute(select(Task).where(Task.status == "verifying"))
+        matured_tasks = res.scalars().all()
+        
+        for task in matured_tasks:
+            logger.info(f"VACN_FINALIZER: Finalizing task {task.id}")
+            
+            # Protocol Call: Finalize on-chain
+            agent_res = await db.execute(select(Agent).where(Agent.id == task.agent_id))
+            agent = agent_res.scalars().first()
+            
+            if agent:
+                ok, tx_sig = await billing_service.finalize_task_settlement(
+                    task.id, task.user_wallet, agent.creator_wallet
+                )
+                if ok:
+                    task.status = "settled"
+                    task.settlement_signature = tx_sig
+                    await db.commit()
+                    logger.info(f"VACN_FINALIZER: Task {task.id} finalized. Sig: {tx_sig}")
 
 async def run_workflow_task(ctx, run_id: str, workflow_id: str, initial_input: dict):
     """
@@ -198,22 +246,25 @@ async def run_workflow_task(ctx, run_id: str, workflow_id: str, initial_input: d
                     try: step_input = json.loads(filled) if filled.strip().startswith("{") else {"input": filled}
                     except: step_input = {"input": filled}
 
-                # AgentOS: Verifiable step execution via Arcium
-                code_hash = hashlib.sha256(json.dumps(current_ver['files']).encode()).hexdigest()
-                exec_envelope = await arcium_client.execute_confidential_task(code_hash, step_input)
+                # VACN: Verifiable step execution via Arcium
+                exec_envelope = await arcium_client.execute_confidential_task(
+                    agent.id, 
+                    current_ver['files'], 
+                    step_input
+                )
                 
                 exec_result = exec_envelope["result"]
-                poe = exec_envelope["proof_of_execution"]
+                poae = exec_envelope["proof_of_autonomous_execution"]
 
                 if exec_result["status"] != "success":
                     raise Exception(f"Agent {agent_id} execution fault")
 
-                # Success: update tracking with Protocol PoE
+                # Success: update tracking with Protocol PoAE
                 step_output = exec_result.get("data", "")
                 step_data = {
                     "status": "completed",
                     "output": step_output,
-                    "poe_receipt": poe
+                    "poae_receipt": poae
                 }
                 
                 db_run.completed_steps[step_id] = step_data
@@ -258,8 +309,14 @@ async def shutdown(ctx):
     await ctx['redis_queue'].close()
     await ctx['redis_pubsub'].close()
 
+from arq import cron
+
 class WorkerSettings:
-    functions = [run_agent_task, run_workflow_task]
+    functions = [run_agent_task, run_workflow_task, finalize_vacn_settlements]
+    cron_jobs = [
+        cron(finalize_vacn_settlements, minute=None, second=0) # Run every minute
+    ]
     redis_settings = RedisSettings(host=REDIS_QUEUE_HOST, port=REDIS_QUEUE_PORT, password=REDIS_PASSWORD)
     on_startup = startup
     on_shutdown = shutdown
+wn
