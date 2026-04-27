@@ -397,4 +397,3 @@ class WorkerSettings:
     redis_settings = RedisSettings(host=REDIS_QUEUE_HOST, port=REDIS_QUEUE_PORT, password=REDIS_PASSWORD)
     on_startup = startup
     on_shutdown = shutdown
-wn

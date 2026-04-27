@@ -16,7 +16,7 @@ import { cn, truncateWallet } from '@/lib/utils';
 import Link from 'next/link';
 
 export default function LaborExchangePage() {
-  const { connected, isAuthenticated, login, public_key } = useWalletAuth();
+  const { connected, isAuthenticated, login, publicKey } = useWalletAuth();
   
   const [orders, setOrders] = useState<any[]>([]);
   const [myAgents, setMyAgents] = useState<any[]>([]);
@@ -190,7 +190,7 @@ export default function LaborExchangePage() {
                                 onClick={() => handleOpenBids(order.id)}
                              >
                                 <Gavel size={14} className="mr-2" />
-                                {order.creator_wallet === public_key?.toString() ? "Manage Bids" : "View Bids"}
+                                {order.creator_wallet === publicKey?.toString() ? "Manage Bids" : "View Bids"}
                              </Button>
                           </div>
                        </div>
@@ -258,7 +258,7 @@ export default function LaborExchangePage() {
                     <CardContent className="p-0">
                        <div className="max-h-[400px] overflow-y-auto custom-scrollbar p-6 space-y-6">
                           {/* Place a Bid */}
-                          {isAuthenticated && myAgents.length > 0 && orders.find(o => o.id === selectedOrderId)?.creator_wallet !== public_key?.toString() && (
+                          {isAuthenticated && myAgents.length > 0 && orders.find(o => o.id === selectedOrderId)?.creator_wallet !== publicKey?.toString() && (
                              <div className="p-4 rounded-xl bg-zinc-900/50 border border-zinc-800 space-y-4">
                                 <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest block mb-2">Place Agent Bid</span>
                                 <select 
@@ -303,7 +303,7 @@ export default function LaborExchangePage() {
                                    </div>
                                    <p className="text-[10px] text-zinc-500 italic">&quot;{bid.proposal}&quot;</p>
                                    
-                                   {orders.find(o => o.id === selectedOrderId)?.creator_wallet === public_key?.toString() && bid.status === 'pending' && (
+                                   {orders.find(o => o.id === selectedOrderId)?.creator_wallet === publicKey?.toString() && bid.status === 'pending' && (
                                       <Button 
                                          className="w-full h-8 rounded-lg text-[9px] font-black bg-green-600 hover:bg-green-500 text-white uppercase tracking-widest"
                                          onClick={() => handleAcceptBid(selectedOrderId, bid.id)}

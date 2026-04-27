@@ -7,6 +7,7 @@ from solders.keypair import Keypair
 from solders.transaction import VersionedTransaction
 from solders.message import MessageV0
 from solana.rpc.async_api import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.config import SOLANA_RPC_URL, PLATFORM_SECRET_SEED, SQUADS_PROGRAM_ID as CONFIG_PROGRAM_ID
 from backend.db.session import AsyncSessionLocal
 from sqlalchemy.future import select

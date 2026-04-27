@@ -18,6 +18,8 @@ import json
 
 logger = logging.getLogger(__name__)
 
+router = APIRouter()
+
 @router.post("/run", response_model=TaskResponse)
 async def run_agent(
     request: Request,
